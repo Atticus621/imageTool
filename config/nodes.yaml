@@ -1,0 +1,22 @@
+categories:
+  - key: "图像源"
+    name: "图像源"
+    order: 1
+    nodes:
+      - id: "image_source/input_image_set"
+        order: 1
+      - id: "image_source/camera"
+        order: 2
+
+  - key: "检测"
+    name: "检测"
+    order: 2
+    subcategories:
+      - key: "形状检测"
+        name: "形状检测"
+        order: 1
+        nodes:
+          - id: "detection/shape_detection/circle"
+            order: 1
+          - id: "detection/shape_detection/polygon"
+            order: 2

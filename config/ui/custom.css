@@ -1,0 +1,96 @@
+QStatusBar {
+    font-size: 12px;
+    padding: 2px 8px;
+}
+
+QToolBar {
+    spacing: 6px;
+    padding: 4px;
+}
+
+QToolBar QToolButton {
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 10px;
+}
+
+QSplitter::handle {
+    background-color: {QTMATERIAL_SECONDARYDARKCOLOR};
+    width: 2px;
+    height: 2px;
+}
+
+QGroupBox {
+    border: 1px solid {QTMATERIAL_SECONDARYDARKCOLOR};
+    border-radius: 6px;
+    margin-top: 10px;
+    padding-top: 14px;
+    font-weight: bold;
+    font-size: 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 6px;
+}
+
+QComboBox {
+    padding: 5px 10px;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QSpinBox, QDoubleSpinBox {
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+QLineEdit {
+    padding: 5px 8px;
+    border-radius: 4px;
+}
+
+QPushButton {
+    padding: 5px 14px;
+    border-radius: 4px;
+    min-height: 22px;
+}
+
+QSlider::groove:horizontal {
+    height: 6px;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    width: 16px;
+    height: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+
+QScrollArea {
+    border: none;
+    border-radius: 4px;
+}
+
+QFrame[frameShape="4"] {
+    max-height: 1px;
+}
+
+QDialog {
+    border-radius: 8px;
+}
+
+QTreeWidget {
+    border-radius: 4px;
+}
+
+QTreeWidget::item {
+    padding: 4px 2px;
+    border-radius: 3px;
+}
+
+QTreeWidget::item:selected {
+    border-radius: 3px;
+}

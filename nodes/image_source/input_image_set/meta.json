@@ -1,0 +1,45 @@
+{
+    "id": "image_source/input_image_set",
+    "name": "图集",
+    "category": "图像源",
+    "subcategory": "",
+    "description": "从文件加载图像或接收输入端口图像",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输入",
+            "multi": false
+        }
+    ],
+    "outputs": [
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输出",
+            "multi": false
+        }
+    ],
+    "params": [
+        {
+            "name": "source",
+            "type": "combo",
+            "label": "来源",
+            "default": "custom",
+            "options": [
+                {"value": "custom", "label": "自定义"},
+                {"value": "previous", "label": "上一级输入"}
+            ]
+        },
+        {
+            "name": "file_list",
+            "type": "file_list",
+            "label": "图像路径",
+            "default": [],
+            "multi": true,
+            "filters": "Images (*.png *.jpg *.jpeg *.bmp *.tiff *.tif)"
+        }
+    ]
+}

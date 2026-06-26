@@ -1,0 +1,88 @@
+{
+    "id": "detection/shape_detection/circle",
+    "name": "圆检测",
+    "category": "检测",
+    "subcategory": "形状检测",
+    "description": "使用霍夫圆变换检测图像中的圆形",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输入"
+        }
+    ],
+    "outputs": [
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输出"
+        }
+    ],
+    "params": [
+        {
+            "name": "detection_method",
+            "type": "combo",
+            "label": "检测方法",
+            "default": "hough",
+            "options": [
+                {"value": "hough", "label": "基尔霍夫检测"}
+            ]
+        },
+        {
+            "name": "dp",
+            "type": "float_slider",
+            "label": "累加器分辨率比",
+            "default": 1.2,
+            "min": 1.0,
+            "max": 3.0,
+            "step": 0.1
+        },
+        {
+            "name": "min_dist",
+            "type": "int_slider",
+            "label": "圆心最小距离",
+            "default": 50,
+            "min": 10,
+            "max": 500,
+            "step": 5
+        },
+        {
+            "name": "param1",
+            "type": "int_slider",
+            "label": "Canny高阈值",
+            "default": 100,
+            "min": 10,
+            "max": 500,
+            "step": 5
+        },
+        {
+            "name": "param2",
+            "type": "int_slider",
+            "label": "累加器阈值",
+            "default": 30,
+            "min": 5,
+            "max": 200,
+            "step": 1
+        },
+        {
+            "name": "min_radius",
+            "type": "int_slider",
+            "label": "最小半径",
+            "default": 10,
+            "min": 0,
+            "max": 500,
+            "step": 1
+        },
+        {
+            "name": "max_radius",
+            "type": "int_slider",
+            "label": "最大半径",
+            "default": 200,
+            "min": 0,
+            "max": 1000,
+            "step": 5
+        }
+    ]
+}

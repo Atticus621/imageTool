@@ -1,0 +1,52 @@
+{
+    "id": "detection/shape_detection/polygon",
+    "name": "多边形检测",
+    "category": "检测",
+    "subcategory": "形状检测",
+    "description": "检测图像中的多边形（待实现）",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输入"
+        }
+    ],
+    "outputs": [
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输出"
+        }
+    ],
+    "params": [
+        {
+            "name": "detection_method",
+            "type": "combo",
+            "label": "检测方法",
+            "default": "contour",
+            "options": [
+                {"value": "contour", "label": "轮廓检测"}
+            ]
+        },
+        {
+            "name": "epsilon_factor",
+            "type": "float_slider",
+            "label": "近似精度系数",
+            "default": 0.02,
+            "min": 0.001,
+            "max": 0.1,
+            "step": 0.001
+        },
+        {
+            "name": "min_area",
+            "type": "int_slider",
+            "label": "最小面积",
+            "default": 500,
+            "min": 50,
+            "max": 10000,
+            "step": 50
+        }
+    ]
+}

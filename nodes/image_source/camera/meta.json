@@ -1,0 +1,28 @@
+{
+    "id": "image_source/camera",
+    "name": "相机源",
+    "category": "图像源",
+    "subcategory": "",
+    "description": "从相机设备采集一帧图像",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [],
+    "outputs": [
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输出"
+        }
+    ],
+    "params": [
+        {
+            "name": "device_id",
+            "type": "int_slider",
+            "label": "设备ID",
+            "default": 0,
+            "min": 0,
+            "max": 10,
+            "step": 1
+        }
+    ]
+}
