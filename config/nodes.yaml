@@ -20,3 +20,27 @@ categories:
             order: 1
           - id: "detection/shape_detection/polygon"
             order: 2
+      - key: "YOLO"
+        name: "YOLO"
+        order: 2
+        nodes:
+          - id: "detection/yolo/yolo_detect"
+            order: 1
+
+  - key: "颜色处理"
+    name: "颜色处理"
+    order: 3
+    nodes:
+      - id: "processing/color_conversion/convert"
+        order: 1
+      - id: "processing/color_conversion/color_filter"
+        order: 2
+
+  - key: "图像运算"
+    name: "图像运算"
+    order: 4
+    nodes:
+      - id: "processing/image_operations/mask_operations"
+        order: 1
+      - id: "processing/image_operations/morphology"
+        order: 2

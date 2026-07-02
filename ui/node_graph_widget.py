@@ -3,6 +3,7 @@ import os
 os.environ["QT_API"] = "pyside6"
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import QWidget, QVBoxLayout
 
 from NodeGraphQt import NodeGraph, BaseNode
@@ -31,11 +32,16 @@ class GraphNode(BaseNode):
         self.set_name(meta.name)
 
         self._port_label_to_name = {}
+        self._port_count_groups: dict[str, list[str]] = {}  # count_param → [port_label, ...]
 
         for pdef in meta.inputs:
             port_name = pdef.label or pdef.name
             self.add_input(port_name, multi_input=True, display_name=True)
             self._port_label_to_name[port_name] = pdef.name
+
+            if pdef.count_param:
+                group = self._port_count_groups.setdefault(pdef.count_param, [])
+                group.append(port_name)
 
         for pdef in meta.outputs:
             port_name = pdef.label or pdef.name
@@ -45,6 +51,24 @@ class GraphNode(BaseNode):
         for p in meta.params:
             if p.default is not None:
                 self._param_values[p.name] = p.default
+
+        # Apply initial visibility
+        self._apply_port_count_visibility()
+
+    def _apply_port_count_visibility(self):
+        """Show/hide input ports based on count_param and current _param_values."""
+        if not hasattr(self, '_port_count_groups'):
+            return
+        all_ports = self.inputs()
+        for count_param, port_labels in self._port_count_groups.items():
+            count = int(self._param_values.get(count_param, len(port_labels)))
+            for i, label in enumerate(port_labels):
+                if label in all_ports:
+                    all_ports[label].set_visible(i < count, push_undo=False)
+
+    def sync_port_visibility(self):
+        """Public method called after _param_values is updated from UI."""
+        self._apply_port_count_visibility()
 
     def update_state_color(self, state: str):
         self._state = state
@@ -82,6 +106,7 @@ class GraphNode(BaseNode):
 
 class NodeGraphWidget(QWidget):
     node_replace_requested = Signal(object)
+    node_delete_requested = Signal(object)
     node_created_with_meta = Signal(object, str)
 
     def __init__(self, parent=None):
@@ -107,6 +132,11 @@ class NodeGraphWidget(QWidget):
 
         viewer = self._graph.viewer()
         layout.addWidget(viewer)
+
+        self._setup_shortcuts()
+
+        # Clipboard for copy/paste nodes: list of {node_id, params, x, y}
+        self._clipboard: list[dict] = []
 
     def _setup_context_menu(self):
         context_menu = self._graph.get_context_menu("graph")
@@ -139,6 +169,11 @@ class NodeGraphWidget(QWidget):
             self._on_replace_node,
             node_type="imagetools.GraphNode",
         )
+        nodes_menu.add_command(
+            "删除节点",
+            self._on_delete_node,
+            node_type="imagetools.GraphNode",
+        )
 
     def _make_create_node_action(self, node_id: str):
         def action(graph):
@@ -146,12 +181,74 @@ class NodeGraphWidget(QWidget):
             self._create_node_by_id(node_id, pos=pos, emit_signal=True)
         return action
 
+    def _setup_shortcuts(self):
+        """Register keyboard shortcuts for copy / paste / delete."""
+        view = self._graph.viewer()
+        # Delete / Backspace → delete selected nodes
+        QShortcut(QKeySequence(Qt.Key_Delete), view, self._delete_selected_nodes)
+        QShortcut(QKeySequence(Qt.Key_Backspace), view, self._delete_selected_nodes)
+        # Ctrl+C → copy selected nodes
+        QShortcut(QKeySequence.StandardKey.Copy, view, self._copy_selected_nodes)
+        # Ctrl+V → paste copied node(s)
+        QShortcut(QKeySequence.StandardKey.Paste, view, self._paste_nodes)
+
+    # ── Delete ────────────────────────────────────────────────────────
+
+    def _delete_selected_nodes(self):
+        nodes = self._graph.selected_nodes()
+        if not nodes:
+            return
+        for node in list(nodes):
+            logger.info(f"Delete via shortcut: {node.name()}")
+            self._graph.remove_node(node)
+
+    # ── Copy / Paste ──────────────────────────────────────────────────
+
+    def _copy_selected_nodes(self):
+        nodes = self._graph.selected_nodes()
+        if not nodes:
+            return
+        # Find the top-left anchor so pasted nodes keep relative layout
+        min_x = min(n.x_pos() for n in nodes)
+        min_y = min(n.y_pos() for n in nodes)
+
+        self._clipboard = []
+        for n in nodes:
+            self._clipboard.append({
+                "node_id": getattr(n, "_node_id", ""),
+                "params": dict(getattr(n, "_param_values", {})),
+                "dx": n.x_pos() - min_x,
+                "dy": n.y_pos() - min_y,
+            })
+        logger.info(f"Copied {len(self._clipboard)} node(s) to clipboard")
+
+    def _paste_nodes(self):
+        if not self._clipboard:
+            return
+        cursor = self._graph.cursor_pos()
+        cx, cy = cursor[0], cursor[1]
+
+        for entry in self._clipboard:
+            node_id = entry["node_id"]
+            if not node_id:
+                continue
+            pos = (cx + entry["dx"], cy + entry["dy"])
+            node = self._create_node_by_id(node_id, pos=pos, emit_signal=False)
+            if node is not None and entry["params"]:
+                node._param_values.update(entry["params"])
+                node.sync_port_visibility()
+        logger.info(f"Pasted {len(self._clipboard)} node(s) at cursor")
+
     def _on_create_empty_node(self, graph):
         logger.info("Create empty node requested")
 
     def _on_replace_node(self, graph, node):
         logger.info(f"Replace requested for: {node.name()}")
         self.node_replace_requested.emit(node)
+
+    def _on_delete_node(self, graph, node):
+        logger.info(f"Delete requested for: {node.name()}")
+        self.node_delete_requested.emit(node)
 
     def create_node_by_id(self, node_id: str, pos=None):
         return self._create_node_by_id(node_id, pos=pos)

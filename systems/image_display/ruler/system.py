@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING
 
 from core.events import EventEmitter
 from systems.base import ISystem
-from systems.ruler.measure import MeasurementResult, RulerMeasure
+from systems.image_display.ruler.measure import MeasurementResult, RulerMeasure
 
 if TYPE_CHECKING:
-    from systems.image_display.system import ImageDisplaySystem
+    from core.interfaces import IImageDisplayProvider
 
 
 class RulerSystem(ISystem):
@@ -23,7 +23,7 @@ class RulerSystem(ISystem):
     Wraps RulerMeasure with calibration management and lifecycle.
     """
 
-    def __init__(self, image_display: "ImageDisplaySystem"):
+    def __init__(self, image_display: "IImageDisplayProvider"):
         self._image_display = image_display
         self._measure = RulerMeasure()
         self.on_measurement_added = EventEmitter()

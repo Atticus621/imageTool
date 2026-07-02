@@ -3,7 +3,7 @@
     "name": "相机源",
     "category": "图像源",
     "subcategory": "",
-    "description": "从相机设备采集一帧图像",
+    "description": "从相机设备采集图像；循环模式下后台持续录像，节点每次取最新帧",
     "version": "1.0.0",
     "icon": "",
     "inputs": [],

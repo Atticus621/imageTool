@@ -1,14 +1,15 @@
 import cv2
 import numpy as np
 
+from core.image_data import ImageData, convert_to_gray
 from core.logger import logger
 from core.node_base.node import NodeBase, NodeState
 
 
 class CircleDetectionNode(NodeBase):
     def execute(self) -> bool:
-        input_images = self._get_input_images("images")
-        if not input_images:
+        items = self._get_input_images_raw("images")
+        if not items:
             logger.warning(f"[{self.meta.name}] No input images")
             self.set_state(NodeState.ERROR)
             return False
@@ -20,23 +21,41 @@ class CircleDetectionNode(NodeBase):
         min_radius = self.params.get("min_radius", 10)
         max_radius = self.params.get("max_radius", 200)
 
-        results = []
-        for img in input_images:
+        results: list[ImageData] = []
+        for item in items:
+            if isinstance(item, ImageData):
+                img = item.array
+                color_space = item.color_space
+            elif isinstance(item, np.ndarray):
+                img = item
+                color_space = "bgr"
+            else:
+                continue
+
             result = self._detect_circles(
-                img, dp, min_dist, param1, param2, min_radius, max_radius
+                img, dp, min_dist, param1, param2, min_radius, max_radius,
+                color_space,
             )
-            results.append(result)
+            results.append(ImageData(array=result, color_space=color_space))
 
         self._set_output_images("images", results)
         logger.info(f"[{self.meta.name}] Processed {len(results)} images")
         self.set_state(NodeState.SUCCESS)
         return True
 
-    def _detect_circles(self, img: np.ndarray, dp: float, min_dist: int,
-                        param1: int, param2: int, min_radius: int,
-                        max_radius: int) -> np.ndarray:
+    def _detect_circles(
+        self,
+        img: np.ndarray,
+        dp: float,
+        min_dist: int,
+        param1: int,
+        param2: int,
+        min_radius: int,
+        max_radius: int,
+        color_space: str = "bgr",
+    ) -> np.ndarray:
         output = img.copy()
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = convert_to_gray(img, color_space)
         gray = cv2.GaussianBlur(gray, (9, 9), 2)
 
         circles = cv2.HoughCircles(

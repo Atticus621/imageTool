@@ -10,6 +10,7 @@ import threading
 from typing import TYPE_CHECKING
 
 from core.events import EventEmitter
+from core.interfaces import IExecutionProvider
 from core.logger import logger
 from core.node_base.registry import node_registry
 from core.node_base.node import NodeState
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from NodeGraphQt import NodeGraph
 
 
-class ExecutionEngine:
+class ExecutionEngine(IExecutionProvider):
     """Coordinates pipeline execution on a background thread.
 
     Events (all via EventEmitter):

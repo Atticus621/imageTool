@@ -1,38 +1,54 @@
 import cv2
 import numpy as np
 
+from core.image_data import ImageData, convert_to_gray
 from core.logger import logger
 from core.node_base.node import NodeBase, NodeState
 
 
 class PolygonDetectionNode(NodeBase):
     def execute(self) -> bool:
-        input_images = self._get_input_images("images")
-        if not input_images:
+        items = self._get_input_images_raw("images")
+        if not items:
             logger.warning(f"[{self.meta.name}] No input images")
             self.set_state(NodeState.ERROR)
             return False
 
-        results = []
-        for img in input_images:
-            result = self._detect_polygons(img)
-            results.append(result)
+        epsilon_factor = self.params.get("epsilon_factor", 0.02)
+        min_area = self.params.get("min_area", 500)
+
+        results: list[ImageData] = []
+        for item in items:
+            if isinstance(item, ImageData):
+                img = item.array
+                color_space = item.color_space
+            elif isinstance(item, np.ndarray):
+                img = item
+                color_space = "bgr"
+            else:
+                continue
+
+            result = self._detect_polygons(img, epsilon_factor, min_area, color_space)
+            results.append(ImageData(array=result, color_space=color_space))
 
         self._set_output_images("images", results)
         logger.info(f"[{self.meta.name}] Processed {len(results)} images")
         self.set_state(NodeState.SUCCESS)
         return True
 
-    def _detect_polygons(self, img: np.ndarray) -> np.ndarray:
+    def _detect_polygons(
+        self,
+        img: np.ndarray,
+        epsilon_factor: float,
+        min_area: int,
+        color_space: str = "bgr",
+    ) -> np.ndarray:
         output = img.copy()
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = convert_to_gray(img, color_space)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         edges = cv2.Canny(blurred, 50, 150)
 
         contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-        epsilon_factor = self.params.get("epsilon_factor", 0.02)
-        min_area = self.params.get("min_area", 500)
 
         count = 0
         for contour in contours:

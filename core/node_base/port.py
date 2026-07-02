@@ -17,12 +17,13 @@ class PortDirection(Enum):
 
 class PortDefinition:
     def __init__(self, name: str, port_type: PortType, direction: PortDirection,
-                 multi: bool = False, label: str = None):
+                 multi: bool = False, label: str = None, count_param: str = ""):
         self.name = name
         self.port_type = port_type
         self.direction = direction
         self.multi = multi
         self.label = label or name
+        self.count_param = count_param
 
     def to_dict(self) -> dict:
         return {
@@ -41,6 +42,7 @@ class PortDefinition:
             direction=direction,
             multi=d.get("multi", False),
             label=d.get("label"),
+            count_param=d.get("count_param", ""),
         )
 
     def __repr__(self):

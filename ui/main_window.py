@@ -5,7 +5,7 @@ os.environ["QT_API"] = "pyside6"
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QSplitter,
+    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
     QMenuBar, QStatusBar, QMenu, QMessageBox,
 )
 
@@ -14,17 +14,18 @@ from core.config import config
 from core.node_base.registry import node_registry
 from core.engine.executor import ExecutionEngine
 from core.engine.result import ExecutionResult
-from systems.blueprint.system import BlueprintSystem
-from systems.image_display.system import ImageDisplaySystem
+from core.interfaces import IImageDisplayProvider, INodeGraphProvider
 from ui.node_graph_widget import NodeGraphWidget, GraphNode
 from ui.node_selector import NodeSelectorWindow
+from ui.widgets.info_panel import InfoPanelWidget
+from ui.execution_controller import ExecutionController
 
 
 class MainWindow(QMainWindow):
     def __init__(
         self,
-        image_display: ImageDisplaySystem | None = None,
-        blueprint: BlueprintSystem | None = None,
+        image_display: IImageDisplayProvider | None = None,
+        blueprint: INodeGraphProvider | None = None,
     ):
         super().__init__()
         self.setWindowTitle(config.get("ui.window_title", "ImageTools"))
@@ -33,14 +34,32 @@ class MainWindow(QMainWindow):
             config.get("ui.window_height", 900),
         )
 
-        # Injected systems (with defaults for backward compat)
-        self._image_display = image_display or ImageDisplaySystem()
-        self._blueprint = blueprint or BlueprintSystem()
+        # Injected systems (with fallback defaults for backward compat)
+        if image_display is None:
+            from systems.image_display.system import ImageDisplaySystem
+            self._image_display = ImageDisplaySystem()
+        else:
+            self._image_display = image_display
+
+        if blueprint is None:
+            from systems.blueprint.system import BlueprintSystem
+            self._blueprint = BlueprintSystem()
+        else:
+            self._blueprint = blueprint
 
         self._node_graph_widget = None
         self._node_selector = None
         self._engine = ExecutionEngine(self)
-        self._loop_mode = False
+
+        # Execution state machine — centralized in ExecutionController
+        self._exec_ctrl = ExecutionController(
+            engine=self._engine,
+            graph_getter=lambda: self._node_graph_widget.graph,
+            on_before_execute=self._reset_all_node_states,
+            parent=self,
+        )
+        self._exec_ctrl.state_changed.connect(self._sync_execution_ui)
+
         self._init_ui()
         self._init_menu()
         self._init_toolbar()
@@ -73,7 +92,23 @@ class MainWindow(QMainWindow):
 
     def _create_right_panel(self) -> QWidget:
         from ui.image_viewer import ImageViewerWidget
-        return ImageViewerWidget(self._image_display)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._image_viewer = ImageViewerWidget(self._image_display)
+        self._info_panel = InfoPanelWidget()
+
+        # Register for remote simulation
+        from core.network.api.v1.simulation import register_widget
+        register_widget("image_viewer", self._image_viewer)
+
+        layout.addWidget(self._image_viewer, 1)
+        layout.addWidget(self._info_panel, 0)
+
+        return container
 
     def _init_menu(self):
         menu_bar = self.menuBar()
@@ -84,12 +119,12 @@ class MainWindow(QMainWindow):
         file_menu.addAction("退出", self.close)
 
         run_menu = menu_bar.addMenu("运行(&R)")
-        run_menu.addAction("开始执行", self._on_execute)
-        run_menu.addAction("停止执行", self._on_stop)
+        run_menu.addAction("单次执行", self._exec_ctrl.execute_once)
+        run_menu.addAction("停止执行", self._exec_ctrl.stop)
         run_menu.addSeparator()
         self._action_loop = QAction("循环运行", self)
         self._action_loop.setCheckable(True)
-        self._action_loop.triggered.connect(self._on_toggle_loop)
+        self._action_loop.triggered.connect(self._exec_ctrl.toggle_loop)
         run_menu.addAction(self._action_loop)
 
         view_menu = menu_bar.addMenu("视图(&V)")
@@ -113,20 +148,15 @@ class MainWindow(QMainWindow):
         toolbar = self.addToolBar("执行")
         toolbar.setMovable(False)
 
-        self._btn_execute = QAction("▶ 开始", self)
-        self._btn_execute.triggered.connect(self._on_execute)
-        toolbar.addAction(self._btn_execute)
-
-        self._btn_stop = QAction("■ 停止", self)
-        self._btn_stop.triggered.connect(self._on_stop)
-        toolbar.addAction(self._btn_stop)
-
-        toolbar.addSeparator()
+        self._btn_single = QAction("▶ 单次", self)
+        self._btn_single.triggered.connect(self._exec_ctrl.execute_once)
+        toolbar.addAction(self._btn_single)
 
         self._btn_loop = QAction("🔁 循环", self)
-        self._btn_loop.setCheckable(True)
-        self._btn_loop.triggered.connect(self._on_toggle_loop)
+        self._btn_loop.triggered.connect(self._exec_ctrl.toggle_loop)
         toolbar.addAction(self._btn_loop)
+
+        toolbar.addSeparator()
 
         self._btn_clear = QAction("✕ 清空", self)
         self._btn_clear.triggered.connect(self._on_new_project)
@@ -145,13 +175,15 @@ class MainWindow(QMainWindow):
         graph.node_double_clicked.connect(self._on_node_double_clicked)
         graph.node_selection_changed.connect(self._on_node_selection_changed)
         self._node_graph_widget.node_replace_requested.connect(self._on_replace_requested)
+        self._node_graph_widget.node_delete_requested.connect(self._on_delete_requested)
         self._node_graph_widget.node_created_with_meta.connect(self._on_node_created_with_meta)
 
         self._engine.execution_started.connect(self._on_engine_started)
         self._engine.execution_finished.connect(self._on_engine_finished)
         self._engine.node_state_changed.connect(self._on_node_state_changed)
         self._engine.progress_updated.connect(self._on_progress_updated)
-        self._right_panel.ruler_measurement.connect(self._on_ruler_measurement)
+        self._image_viewer.ruler_measurement.connect(self._on_ruler_measurement)
+        self._image_viewer.pixel_hovered.connect(self._info_panel.update_info)
 
     def _wire_blueprint_system(self):
         """Wire BlueprintSystem to the graph and execution callbacks.
@@ -161,11 +193,11 @@ class MainWindow(QMainWindow):
         """
         self._blueprint.wire(
             graph_getter=lambda: self._node_graph_widget.graph,
-            on_execute=self._on_execute,
-            on_stop=self._on_stop,
+            on_execute=self._exec_ctrl.execute,
+            on_stop=self._exec_ctrl.stop,
             on_clear=self._on_new_project,
-            on_loop_on=self._on_toggle_loop,
-            on_loop_off=self._on_toggle_loop,
+            on_loop_on=self._exec_ctrl.enable_loop,
+            on_loop_off=self._exec_ctrl.disable_loop,
         )
 
     # ------------------------------------------------------------------
@@ -223,6 +255,10 @@ class MainWindow(QMainWindow):
         self._pending_replace_node = node
         self._open_node_selector(node, replace_mode=True)
 
+    def _on_delete_requested(self, node):
+        logger.info(f"Deleting node: {node.name()}")
+        self._node_graph_widget.graph.remove_node(node)
+
     @Slot(str)
     def _on_node_type_selected(self, node_id: str):
         if hasattr(self, '_pending_replace_node') and self._pending_replace_node:
@@ -233,6 +269,7 @@ class MainWindow(QMainWindow):
             if target:
                 param_values = self._node_selector.get_param_values()
                 target._param_values = param_values
+                target.sync_port_visibility()
                 logger.info(f"Updated node params: {target.name()} -> {param_values}")
         else:
             self._node_graph_widget.create_node_by_id(node_id)
@@ -271,29 +308,12 @@ class MainWindow(QMainWindow):
         self._statusbar.showMessage("新项目已创建")
         logger.info("New project created")
 
-    def _on_toggle_loop(self):
-        self._loop_mode = not self._loop_mode
-        self._action_loop.setChecked(self._loop_mode)
-        self._btn_loop.setChecked(self._loop_mode)
-        if self._loop_mode:
-            logger.info("Loop mode enabled")
-            self._statusbar.showMessage("循环模式已启用")
-        else:
-            logger.info("Loop mode disabled")
-            self._statusbar.showMessage("循环模式已关闭")
-
-    def _on_execute(self):
-        graph = self._node_graph_widget.graph
-        self._reset_all_node_states()
-        self._engine.execute(graph)
-
-    def _on_stop(self):
-        self._loop_mode = False
-        self._action_loop.setChecked(False)
-        self._btn_loop.setChecked(False)
-        self._engine.cancel()
-        logger.info("Execution stop requested")
-        self._statusbar.showMessage("正在停止...")
+    def _sync_execution_ui(self):
+        """Single sync point for toolbar/menu — called on every state change."""
+        ctrl = self._exec_ctrl
+        self._btn_loop.setText("■ 停止" if ctrl.loop_mode else "🔁 循环")
+        self._action_loop.setChecked(ctrl.loop_mode)
+        self._btn_single.setEnabled(not ctrl.is_running)
 
     def _on_engine_started(self):
         self._statusbar.showMessage("正在执行...")
@@ -301,13 +321,10 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_engine_finished(self, result: ExecutionResult):
-        self._right_panel.set_execution_results(result)
+        self._image_viewer.set_execution_results(result)
 
-        if self._loop_mode:
-            logger.info(f"Loop: execution finished (success={result.success}), re-executing...")
+        if self._exec_ctrl.loop_mode:
             self._statusbar.showMessage(f"循环执行中... (上次: {'成功' if result.success else '失败'})")
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(100, self._on_execute)
         else:
             if result.success:
                 self._statusbar.showMessage("执行完成 - 成功")
@@ -337,12 +354,13 @@ class MainWindow(QMainWindow):
 
     def _on_reset_zoom(self):
         self._node_graph_widget.graph.reset_zoom()
+        self._image_viewer.reset_zoom()
 
     def _on_fit_selection(self):
         self._node_graph_widget.graph.fit_to_selection()
 
     def _on_toggle_ruler(self):
-        enabled = self._right_panel.toggle_ruler()
+        enabled = self._image_viewer.toggle_ruler()
         self._btn_ruler.setChecked(enabled)
         self._action_ruler.setChecked(enabled)
         if enabled:

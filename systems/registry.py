@@ -26,20 +26,41 @@ class SystemRegistry:
     def __init__(self):
         self._systems: dict[str, ISystem] = {}
         self._deps: dict[str, list[str]] = {}
+        self._parents: dict[str, str | None] = {}
         self._initialized: list[str] = []  # order of successful init
 
-    def register(self, system: ISystem, depends_on: list[str] | None = None) -> None:
-        """Register a system with optional dependencies.
+    def register(
+        self,
+        system: ISystem,
+        depends_on: list[str] | None = None,
+        parent: str | None = None,
+    ) -> None:
+        """Register a system with optional dependencies and parent.
 
         Args:
             system: The system instance to register.
             depends_on: List of system names that must initialize first.
+            parent: Name of the parent system (for subsystems).
+                    Adding a parent automatically adds it to depends_on.
         """
         name = system.name
         if name in self._systems:
             raise ValueError(f"System '{name}' is already registered")
+
+        # Validate parent exists
+        if parent is not None and parent not in self._systems:
+            raise ValueError(
+                f"Parent system '{parent}' not registered for subsystem '{name}'"
+            )
+
         self._systems[name] = system
-        self._deps[name] = depends_on or []
+        self._parents[name] = parent
+
+        # Child implicitly depends on parent
+        deps = list(depends_on or [])
+        if parent is not None and parent not in deps:
+            deps.append(parent)
+        self._deps[name] = deps
 
     def get(self, name: str) -> ISystem:
         """Retrieve a registered system by name.
@@ -52,12 +73,37 @@ class SystemRegistry:
             )
         return self._systems[name]
 
+    def get_subsystems(self, name: str) -> list[ISystem]:
+        """Return direct subsystems of the named system."""
+        if name not in self._systems:
+            raise KeyError(f"System '{name}' not registered")
+        return [
+            sys for sys_name, sys in self._systems.items()
+            if self._parents.get(sys_name) == name
+        ]
+
+    def get_parent(self, name: str) -> str | None:
+        """Return the parent system name, or None if top-level."""
+        if name not in self._systems:
+            raise KeyError(f"System '{name}' not registered")
+        return self._parents.get(name)
+
     def initialize_all(self) -> None:
         """Initialize all registered systems in dependency order.
 
         Systems without dependencies are initialized first.
         Cyclic dependencies are detected and reported.
+
+        Before initializing, each system's register_subsystems() hook
+        is called so parent systems can register their children.
         """
+        # Phase 0: Let every system register its subsystems.
+        # Iterate over a snapshot because register_subsystems may add
+        # new entries to self._systems / self._deps / self._parents.
+        for name, system in list(self._systems.items()):
+            system.register_subsystems(self)
+
+        # Phase 1: Topological sort (includes newly registered subsystems)
         order = self._topological_order()
         self._initialized = []
         for name in order:

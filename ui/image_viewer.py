@@ -1,36 +1,52 @@
 """Image viewer widget — displays pipeline execution results.
 
-Depends on ImageDisplaySystem for image-to-Qt conversion and coordinate
-mapping. Contains no cv2/numpy imports — all image processing is delegated.
+Uses QGraphicsView for zoom/pan — zero custom zoom/pan/scroll logic.
+QGraphicsView handles: AnchorUnderMouse (zoom-to-cursor),
+ScrollHandDrag (middle-button pan), SmoothPixmapTransform (render quality).
+
+Depends on ImageDisplaySystem for color-space-aware numpy→QPixmap conversion.
 """
 
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import Qt, QSize, Signal, QPoint, QRect
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QSize, Signal, QPoint, QPointF, QRectF
+from PySide6.QtGui import QPainter, QTransform
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
-    QScrollArea, QPushButton, QFrame,
+    QScrollArea, QPushButton, QFrame, QGraphicsScene,
 )
+from ui.widgets.zoomable_graphics_view import ZoomableGraphicsView
+from ui.widgets.coordinate_mapper import CoordinateMapper
 
+from core.image_data import ImageData
 from core.logger import logger
 from core.engine.result import ExecutionResult
+from core.interfaces import IImageDisplayProvider
 from systems.image_display.models import DisplayInfo
-from systems.image_display.system import ImageDisplaySystem
 from ui.widgets.ruler_overlay import RulerOverlay
 
 
+# ------------------------------------------------------------------
+# ImageSetWidget — one set of images with thumbnails
+# ------------------------------------------------------------------
+
 class ImageSetWidget(QFrame):
-    """Displays a named set of images with thumbnail navigation."""
+    """Displays a named set of images with thumbnail navigation.
+
+    Uses QGraphicsView so zoom (wheel) and pan (middle-button drag)
+    are handled natively by Qt. No custom zoom/pan/scroll logic.
+    """
 
     image_changed = Signal()
+    pixel_hovered = Signal(object)  # PixelInfo | None
+    ruler_measurement = Signal(object)  # MeasurementResult
 
     def __init__(
         self,
         name: str,
         images: list,
-        image_display: ImageDisplaySystem,
+        image_display: IImageDisplayProvider,
         parent=None,
     ):
         super().__init__(parent)
@@ -38,9 +54,17 @@ class ImageSetWidget(QFrame):
         self._images = images
         self._image_display = image_display
         self._current_index = 0
-        self._display_info: DisplayInfo | None = None
+        self._current_color_space: str = "bgr"
+        self._actual_w: int = 0
+        self._actual_h: int = 0
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self._init_ui()
+        self._init_mouse_tracking()
+        self._select_image(0)
+
+    # ------------------------------------------------------------------
+    # UI
+    # ------------------------------------------------------------------
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -51,22 +75,70 @@ class ImageSetWidget(QFrame):
         self._header.setWordWrap(False)
         layout.addWidget(self._header)
 
-        self._img_label = QLabel()
-        self._img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._img_label.setMinimumHeight(180)
-        self._img_label.setMaximumHeight(300)
-        self._img_label.setStyleSheet(
+        # --- QGraphicsView — native zoom + pan ---
+        self._gv = ZoomableGraphicsView()
+        self._gv.setStyleSheet(
             "background-color: #1a1a2e; border: 1px solid #333; border-radius: 4px;"
         )
-        layout.addWidget(self._img_label)
+        self._gv.setMinimumHeight(180)
+        self._gv.setMaximumHeight(600)
 
+        self._scene = QGraphicsScene()
+        self._gv.setScene(self._scene)
+        self._pixmap_item = None
+        layout.addWidget(self._gv)
+
+        # thumbnails
         self._thumb_row = QHBoxLayout()
         self._thumb_container = QWidget()
         self._thumb_container.setLayout(self._thumb_row)
         layout.addWidget(self._thumb_container)
 
+        # Measurement result label (hidden by default)
+        self._measurement_label = QLabel("")
+        self._measurement_label.setStyleSheet(
+            "color: #00c8ff; font-size: 10px; padding: 2px;"
+        )
+        self._measurement_label.hide()
+        layout.addWidget(self._measurement_label)
+
         self._rebuild_thumbs()
-        self._select_image(0)
+
+        # Ruler overlay (created after gv is set up)
+        self._init_ruler_overlay()
+
+    def _init_mouse_tracking(self):
+        self._gv.viewport().setMouseTracking(True)
+        self._gv.viewport().installEventFilter(self)
+
+    def _init_ruler_overlay(self):
+        self._mapper = CoordinateMapper(self._gv)
+        ruler_system = getattr(self._image_display, 'ruler', None)
+        self._ruler_overlay = RulerOverlay(
+            parent=self._gv.viewport(),
+            mapper=self._mapper,
+            ruler_system=ruler_system,
+        )
+        self._ruler_overlay.setGeometry(self._gv.viewport().rect())
+        self._ruler_overlay.hide()
+        self._ruler_overlay.measurement_added.connect(self._on_measurement_added)
+
+    def _on_measurement_added(self, result):
+        self._measurement_label.setText(f"测量: {result.pixel_distance:.1f}px")
+        self._measurement_label.show()
+        self.ruler_measurement.emit(result)
+
+    def set_ruler_enabled(self, enabled: bool):
+        if enabled:
+            self._ruler_overlay.setGeometry(self._gv.viewport().rect())
+            self._ruler_overlay.set_visible(True)
+            self._ruler_overlay.raise_()
+        else:
+            self._ruler_overlay.set_visible(False)
+
+    def clear_ruler(self):
+        self._ruler_overlay.clear_measurements()
+        self._measurement_label.hide()
 
     def _rebuild_thumbs(self):
         while self._thumb_row.count():
@@ -85,14 +157,16 @@ class ImageSetWidget(QFrame):
             self._thumb_buttons.append(btn)
         self._thumb_row.addStretch()
 
+    # ------------------------------------------------------------------
+    # Image selection / update
+    # ------------------------------------------------------------------
+
     def update_images(self, name: str, images: list):
         if images is self._images and name == self._name:
             return
         if len(images) == len(self._images) and name == self._name:
-            # Pixel-only refresh (e.g. camera loop mode) — don't emit
-            # image_changed so the ruler measurement survives.
             self._images = images
-            self._select_image(self._current_index, emit=False)
+            self._update_image_display(fit=False)
             return
 
         self._name = name
@@ -106,98 +180,227 @@ class ImageSetWidget(QFrame):
         if self._images:
             self._select_image(self._current_index)
 
-    def _select_image(self, index: int, emit: bool = True):
-        if 0 <= index < len(self._images):
-            self._current_index = index
-            img = self._images[index]
-            max_size = QSize(400, 280)
+    def _select_image(self, index: int):
+        if not (0 <= index < len(self._images)):
+            return
+        self._current_index = index
+        self._update_image_display(fit=True)
 
-            # Delegate to ImageDisplaySystem — single source of truth
-            # for DisplayInfo (fixes the DPR-related ruler measurement bug).
-            self._display_info = self._image_display.compute_display_info(img, 400, 280)
-            pixmap = self._image_display.convert_to_qpixmap(img, max_size)
-            self._img_label.setPixmap(pixmap)
+    def _update_image_display(self, fit: bool = False):
+        """Load the current image into the scene, scaling the pixmap to the
+        viewport resolution while keeping scene coordinates equal to original
+        image pixels (so coordinate mapping stays correct).
+        """
+        raw = self._images[self._current_index]
+        if isinstance(raw, ImageData):
+            img = raw.array
+            self._current_color_space = raw.color_space
+        else:
+            img = raw
+            self._current_color_space = "bgr"
 
-            for i, btn in enumerate(self._thumb_buttons):
-                btn.setChecked(i == index)
+        self._actual_h, self._actual_w = img.shape[:2]
+        self._mapper.update_image_size(self._actual_w, self._actual_h)
+        self._load_pixmap(img, fit=fit)
 
-            if emit:
-                self.image_changed.emit()
+    def _load_pixmap(self, img: np.ndarray, fit: bool = False):
+        """Convert the image to a viewport-sized QPixmap and add it to the scene.
+
+        The pixmap itself is scaled to fit the viewport, but the QGraphicsItem
+        is scaled so that scene coordinates still map to original image pixels.
+        This keeps CoordinateMapper correct without re-computing map logic.
+        """
+        viewport = self._gv.viewport()
+        max_size = QSize(viewport.width(), viewport.height())
+        pixmap = self._image_display.convert_to_qpixmap(
+            img, max_size=max_size, color_space=self._current_color_space,
+        )
+
+        self._scene.clear()
+        self._pixmap_item = self._scene.addPixmap(pixmap)
+        self._scene.setSceneRect(QRectF(0, 0, self._actual_w, self._actual_h))
+
+        if pixmap.width() > 0 and pixmap.height() > 0:
+            # Scale the downscaled pixmap so it covers the full image rectangle
+            # in scene space. Scene coords therefore remain image pixel coords.
+            scale_x = self._actual_w / pixmap.width()
+            scale_y = self._actual_h / pixmap.height()
+            self._pixmap_item.setTransform(
+                QTransform.fromScale(scale_x, scale_y)
+            )
+
+        if fit:
+            self._gv.fitInView(
+                self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
+            )
+            self._base_transform = self._gv.transform()
+
+        for i, btn in enumerate(self._thumb_buttons):
+            btn.setChecked(i == self._current_index)
+
+        self.image_changed.emit()
+
+    def update_current_image(self, img: np.ndarray, color_space: str = "bgr"):
+        """Update the currently displayed image without rebuilding the widget.
+
+        Used for video loops where only the current frame changes.
+        """
+        if isinstance(img, ImageData):
+            self._current_color_space = img.color_space
+            img = img.array
+        else:
+            self._current_color_space = color_space
+
+        self._actual_h, self._actual_w = img.shape[:2]
+        self._mapper.update_image_size(self._actual_w, self._actual_h)
+        self._load_pixmap(img, fit=False)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def image_count(self) -> int:
+        return len(self._images)
+
+    # ------------------------------------------------------------------
+    # Accessors
+    # ------------------------------------------------------------------
 
     def get_current_image(self) -> np.ndarray | None:
         if 0 <= self._current_index < len(self._images):
-            return self._images[self._current_index]
+            raw = self._images[self._current_index]
+            if isinstance(raw, ImageData):
+                return raw.array
+            return raw
         return None
 
+    def get_current_image_color_space(self) -> str:
+        return self._current_color_space
+
     def get_display_info(self) -> DisplayInfo | None:
-        """Return the DisplayInfo for the current image.
-
-        Used by ImageViewerWidget for coordinate mapping.
-        """
-        return self._display_info
-
-    def get_pixmap_rect_in_label(self) -> tuple[float, float, float, float] | None:
-        """Return (offset_x, offset_y, display_w, display_h) for the pixmap
-        within the label. Used for centering offset calculation."""
-        if self._display_info is None:
-            return None
-        label_w = self._img_label.width()
-        label_h = self._img_label.height()
-        offset_x = (label_w - self._display_info.display_w) / 2
-        offset_y = (label_h - self._display_info.display_h) / 2
-        return (
-            offset_x, offset_y,
-            self._display_info.display_w, self._display_info.display_h,
+        """Build DisplayInfo from the current view transform."""
+        tr = self._gv.transform()
+        # m11 = horizontal scale, m22 = vertical scale
+        scale_x = tr.m11() if tr.m11() != 0 else 1.0
+        scale_y = tr.m22() if tr.m22() != 0 else 1.0
+        display_w = int(self._actual_w * scale_x)
+        display_h = int(self._actual_h * scale_y)
+        return DisplayInfo(
+            actual_w=self._actual_w,
+            actual_h=self._actual_h,
+            display_w=display_w,
+            display_h=display_h,
         )
 
+    # ------------------------------------------------------------------
+    # Coordinate mapping — delegated to CoordinateMapper
+    # ------------------------------------------------------------------
+
+    def map_viewport_to_image(
+        self, viewport_x: float, viewport_y: float
+    ) -> tuple[int, int] | None:
+        """Map viewport-local coordinates to image pixel coordinates."""
+        return self._mapper.viewport_to_image(viewport_x, viewport_y)
+
+    # ------------------------------------------------------------------
+    # Mouse tracking → pixel info
+    # ------------------------------------------------------------------
+
+    def eventFilter(self, obj, event):
+        from PySide6.QtCore import QEvent
+
+        if obj is self._gv.viewport() and event.type() == QEvent.Type.MouseMove:
+            self._handle_mouse_move(event)
+        return super().eventFilter(obj, event)
+
+    def _handle_mouse_move(self, event):
+        pos = event.position()
+        img_coords = self.map_viewport_to_image(pos.x(), pos.y())
+
+        if img_coords is None:
+            self.pixel_hovered.emit(None)
+            return
+
+        ix, iy = img_coords
+        img = self.get_current_image()
+        if img is None:
+            self.pixel_hovered.emit(None)
+            return
+
+        info_system = getattr(self._image_display, 'info', None)
+        if info_system is None:
+            self.pixel_hovered.emit(None)
+            return
+
+        pixel_info = info_system.get_pixel_info(
+            img, ix, iy, self._current_color_space,
+        )
+        self.pixel_hovered.emit(pixel_info)
+
+
+# ------------------------------------------------------------------
+# ImageViewerWidget — orchestrates multiple ImageSetWidgets + ruler
+# ------------------------------------------------------------------
 
 class ImageViewerWidget(QWidget):
-    """Right-side panel displaying pipeline execution results (input/output sets).
+    """Right-side panel: toolbar, image set list, ruler overlay.
 
-    Coordinates ruler overlay placement and delegates coordinate mapping
-    to ImageDisplaySystem.
+    No custom zoom/pan code — that's all in QGraphicsView.
+    Coordinates ruler overlay placement across multiple ImageSetWidgets.
     """
 
     ruler_measurement = Signal(object)
+    pixel_hovered = Signal(object)  # PixelInfo | None
 
-    def __init__(self, image_display: ImageDisplaySystem, parent=None):
+    def __init__(self, image_display: IImageDisplayProvider, parent=None):
         super().__init__(parent)
         self._image_display = image_display
         self._result = ExecutionResult(success=False)
         self._current_mode = "output"
-        self._set_widgets: list[ImageSetWidget] = []
+        self._current_widget: ImageSetWidget | None = None
         self._ruler_enabled = False
         self._init_ui()
-        self._init_ruler_overlay()
-        logger.info("ImageViewerWidget initialized")
+        logger.info("ImageViewerWidget initialized (QGraphicsView)")
+
+    # ------------------------------------------------------------------
+    # UI
+    # ------------------------------------------------------------------
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
 
+        # Toolbar
         toolbar = QHBoxLayout()
         self._mode_combo = QComboBox()
         self._mode_combo.setStyleSheet("font-size: 10px;")
         self._mode_combo.setMinimumWidth(100)
-        self._mode_combo.addItem("输出图集", "output")
-        self._mode_combo.addItem("输入图集", "input")
+        self._mode_combo.addItem("输出显示", "output")
+        self._mode_combo.addItem("输入显示", "input")
         self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         toolbar.addWidget(QLabel("显示:"))
         toolbar.addWidget(self._mode_combo)
+
+        self._set_combo = QComboBox()
+        self._set_combo.setStyleSheet("font-size: 10px;")
+        self._set_combo.setMinimumWidth(120)
+        self._set_combo.currentIndexChanged.connect(self._on_set_changed)
+        toolbar.addWidget(QLabel("图集:"))
+        toolbar.addWidget(self._set_combo)
+
         toolbar.addStretch()
         self._count_label = QLabel("")
         toolbar.addWidget(self._count_label)
         layout.addLayout(toolbar)
 
-        self._scroll_area = QScrollArea()
-        self._scroll_area.setWidgetResizable(True)
+        # Single ImageSetWidget container
         self._set_container = QWidget()
         self._set_layout = QVBoxLayout(self._set_container)
-        self._set_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self._set_layout.setSpacing(6)
-        self._scroll_area.setWidget(self._set_container)
-        layout.addWidget(self._scroll_area, 1)
+        self._set_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._set_container, 1)
 
+        # Placeholder
         self._placeholder = QLabel("暂无图像数据\n\n请搭建节点并点击 ▶ 开始 执行")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setStyleSheet("color: #666; font-size: 10px;")
@@ -205,106 +408,39 @@ class ImageViewerWidget(QWidget):
 
         self._refresh_display()
 
-    def _init_ruler_overlay(self):
-        # RulerOverlay uses a map_fn callable for coordinate mapping,
-        # decoupled from the parent widget hierarchy.
-        self._ruler_overlay = RulerOverlay(
-            parent=self,
-            map_fn=self.map_to_image,
-        )
-        self._ruler_overlay.hide()
-        self._ruler_overlay.measurement_added.connect(self._on_ruler_measurement)
-        self._ruler_overlay.measurement_cleared.connect(self._on_ruler_cleared)
+    # ------------------------------------------------------------------
+    # Ruler — coordinated across ImageSetWidgets
+    # ------------------------------------------------------------------
 
     def toggle_ruler(self):
         self._ruler_enabled = not self._ruler_enabled
-        if self._ruler_enabled:
-            self._update_ruler_overlay_geometry()
-            self._ruler_overlay.set_visible(True)
-            self._ruler_overlay.raise_()
-        else:
-            self._ruler_overlay.set_visible(False)
+        if self._current_widget:
+            self._current_widget.set_ruler_enabled(self._ruler_enabled)
         return self._ruler_enabled
 
-    def _update_ruler_overlay_geometry(self):
-        viewport = self._scroll_area.viewport()
-        pos = viewport.mapTo(self, QPoint(0, 0))
-        self._ruler_overlay.setGeometry(
-            pos.x(), pos.y(),
-            viewport.width(), viewport.height(),
-        )
-
     def clear_ruler(self):
-        self._ruler_overlay.clear_measurements()
+        if self._current_widget:
+            self._current_widget.clear_ruler()
 
     # ------------------------------------------------------------------
-    # Coordinate mapping — delegates scale calculation to DisplayInfo
+    # Zoom
     # ------------------------------------------------------------------
 
-    def map_to_image(
-        self, overlay_x: float, overlay_y: float
-    ) -> tuple[int, int] | None:
-        """Map a ruler overlay coordinate to image pixel coordinates.
-
-        The overlay-local (x,y) is converted to global space, matched
-        against visible ImageSetWidget labels, and then the centering
-        offset + DisplayInfo.map_to_image() does the actual mapping.
-        """
-        click_global = self._ruler_overlay.mapToGlobal(
-            QPoint(int(overlay_x), int(overlay_y))
-        )
-
-        for widget in self._set_widgets:
-            if not widget.isVisible():
-                continue
-
-            label = widget._img_label
-            label_global = label.mapToGlobal(QPoint(0, 0))
-            label_rect = QRect(label_global, label.size())
-
-            if not label_rect.contains(click_global):
-                continue
-
-            display_info = widget.get_display_info()
-            if display_info is None:
-                continue
-
-            rect = widget.get_pixmap_rect_in_label()
-            if rect is None:
-                continue
-            offset_x, offset_y, disp_w, disp_h = rect
-
-            # Convert label-local coords to pixmap-local coords
-            local_x = click_global.x() - label_global.x()
-            local_y = click_global.y() - label_global.y()
-            pixmap_x = local_x - offset_x
-            pixmap_y = local_y - offset_y
-
-            # Delegate to DisplayInfo — single source of truth
-            result = display_info.map_to_image(pixmap_x, pixmap_y)
-            if result is not None:
-                logger.debug(
-                    f"[map_to_image] label=({label.width()},{label.height()}) "
-                    f"display=({disp_w},{disp_h}) "
-                    f"actual=({display_info.actual_w},{display_info.actual_h}) "
-                    f"pixmap_pos=({pixmap_x:.1f},{pixmap_y:.1f}) "
-                    f"→ image=({result[0]},{result[1]})"
-                )
-                return result
-
-        return None
+    def reset_zoom(self) -> None:
+        """Reset zoom on current ImageSetWidget."""
+        if self._current_widget:
+            self._current_widget._gv.reset_zoom()
 
     def get_current_image_info(self) -> dict | None:
-        for widget in self._set_widgets:
-            if widget.isVisible():
-                di = widget.get_display_info()
-                if di:
-                    return {
-                        "actual_w": di.actual_w,
-                        "actual_h": di.actual_h,
-                        "display_w": di.display_w,
-                        "display_h": di.display_h,
-                    }
+        if self._current_widget:
+            di = self._current_widget.get_display_info()
+            if di:
+                return {
+                    "actual_w": di.actual_w,
+                    "actual_h": di.actual_h,
+                    "display_w": di.display_w,
+                    "display_h": di.display_h,
+                }
         return None
 
     # ------------------------------------------------------------------
@@ -313,14 +449,6 @@ class ImageViewerWidget(QWidget):
 
     def _on_ruler_measurement(self, result):
         self.ruler_measurement.emit(result)
-
-    def _on_ruler_cleared(self):
-        pass
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if self._ruler_enabled:
-            self._update_ruler_overlay_geometry()
 
     def set_execution_results(self, result: ExecutionResult):
         self._result = result
@@ -331,7 +459,6 @@ class ImageViewerWidget(QWidget):
         current_sets = self._get_current_sets()
         total = sum(len(s.images) for s in current_sets)
         self._count_label.setText(f"{len(current_sets)} 组 / {total} 张")
-        # Don't clear ruler on every result — loop mode would wipe measurements
         self._refresh_display()
 
     def _get_current_sets(self):
@@ -342,62 +469,76 @@ class ImageViewerWidget(QWidget):
     def _on_mode_changed(self, index):
         self._current_mode = self._mode_combo.itemData(index)
         self.clear_ruler()
-        self._rebuild_display()
+        self._refresh_display()
+
+    def _on_set_changed(self, index):
+        self.clear_ruler()
+        self._show_current_set()
 
     def _refresh_display(self):
         sets = self._get_current_sets()
-        total = sum(len(s.images) for s in sets)
-        self._count_label.setText(f"{len(sets)} 组 / {total} 张")
+
+        # Update set combo
+        self._set_combo.blockSignals(True)
+        self._set_combo.clear()
+        for s in sets:
+            self._set_combo.addItem(f"{s.name} ({len(s.images)}张)", s.name)
+        self._set_combo.blockSignals(False)
 
         if not sets:
-            for w in self._set_widgets:
-                w.hide()
+            self._count_label.setText("0 组 / 0 张")
             self._placeholder.show()
-            self._scroll_area.hide()
+            self._set_container.hide()
             return
 
         self._placeholder.hide()
-        self._scroll_area.show()
+        self._set_container.show()
 
-        for i, s in enumerate(sets):
-            if i < len(self._set_widgets):
-                self._set_widgets[i].update_images(s.name, s.images)
-                self._set_widgets[i].show()
-            else:
-                widget = ImageSetWidget(
-                    s.name, s.images, self._image_display
-                )
-                widget.image_changed.connect(self.clear_ruler)
-                self._set_layout.addWidget(widget)
-                self._set_widgets.append(widget)
+        # Show the first set
+        self._show_current_set()
 
-        for i in range(len(sets), len(self._set_widgets)):
-            self._set_widgets[i].hide()
+    def _show_current_set(self):
+        sets = self._get_current_sets()
+        if not sets:
+            return
 
-    def _rebuild_display(self):
-        for w in self._set_widgets:
-            w.deleteLater()
-        self._set_widgets.clear()
+        # Find the selected set
+        set_index = self._set_combo.currentIndex()
+        if set_index < 0 or set_index >= len(sets):
+            set_index = 0
 
+        s = sets[set_index]
+        total = len(s.images)
+        self._count_label.setText(f"{total} 张")
+
+        # Reuse the existing widget if we are displaying the same set.
+        # This avoids recreating QGraphicsView / scene / thumbnails every frame
+        # when running a video loop.
+        if (
+            self._current_widget is not None
+            and self._current_widget.name == s.name
+            and self._current_widget.image_count == total
+        ):
+            self._current_widget.update_images(s.name, s.images)
+            return
+
+        # Remove old widget
+        if self._current_widget:
+            self._current_widget.deleteLater()
+            self._current_widget = None
+
+        # Clear layout
         while self._set_layout.count():
             child = self._set_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        sets = self._get_current_sets()
-        total = sum(len(s.images) for s in sets)
-        self._count_label.setText(f"{len(sets)} 组 / {total} 张")
-
-        if not sets:
-            self._placeholder.show()
-            self._scroll_area.hide()
-            return
-
-        self._placeholder.hide()
-        self._scroll_area.show()
-
-        for s in sets:
-            widget = ImageSetWidget(s.name, s.images, self._image_display)
-            widget.image_changed.connect(self.clear_ruler)
-            self._set_layout.addWidget(widget)
-            self._set_widgets.append(widget)
+        # Create new widget
+        widget = ImageSetWidget(s.name, s.images, self._image_display)
+        widget.image_changed.connect(self.clear_ruler)
+        widget.pixel_hovered.connect(self.pixel_hovered.emit)
+        widget.ruler_measurement.connect(self._on_ruler_measurement)
+        if self._ruler_enabled:
+            widget.set_ruler_enabled(True)
+        self._set_layout.addWidget(widget)
+        self._current_widget = widget
