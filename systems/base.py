@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from systems.registry import SystemRegistry
 
 
 class ISystem(ABC):
@@ -11,6 +15,11 @@ class ISystem(ABC):
     Systems are registered with SystemRegistry and initialized in
     dependency order. UI code depends on systems through their
     public API, never through direct imports of core/ modules.
+
+    Subsystem support:
+        Override register_subsystems(registry) to register child
+        systems via registry.register(child, parent=self.name).
+        The default implementation does nothing.
     """
 
     @property
@@ -33,3 +42,14 @@ class ISystem(ABC):
     def shutdown(self) -> None:
         """Called once at shutdown. Must be idempotent."""
         ...
+
+    def register_subsystems(self, registry: "SystemRegistry") -> None:
+        """Register subsystems with the given registry.
+
+        Called by SystemRegistry.initialize_all() before any system's
+        initialize() is invoked. Override in parent systems that own
+        subsystems to call registry.register(child, parent=self.name).
+
+        Default implementation does nothing.
+        """
+        pass

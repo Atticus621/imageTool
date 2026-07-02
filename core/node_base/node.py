@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from core.logger import logger
+from core.image_data import ImageData
 from .port import Port, PortDefinition, PortDirection, PortType
 
 
@@ -23,6 +24,7 @@ class ParamType(Enum):
     FLOAT_SLIDER = "float_slider"
     TEXT = "text"
     CHECKBOX = "checkbox"
+    CHANNEL_RANGE = "channel_range"
 
 
 @dataclass
@@ -47,10 +49,7 @@ class ParamDefinition:
     step: float | int | None = None
     filters: str = ""
     multi: bool = False
-    source_param: str = ""
     depends_on: str = ""
-    depends_value: Any = None
-    group: str = ""
 
     def __post_init__(self):
         if not self.label:
@@ -104,10 +103,7 @@ class NodeMeta:
                 step=p.get("step"),
                 filters=p.get("filters", ""),
                 multi=p.get("multi", False),
-                source_param=p.get("source_param", ""),
                 depends_on=p.get("depends_on", ""),
-                depends_value=p.get("depends_value"),
-                group=p.get("group", ""),
             ))
 
         return cls(
@@ -126,6 +122,35 @@ class NodeMeta:
 
 
 class NodeBase:
+    # ── Class-level metadata (optional — alternative to meta.json) ──
+    # Set these on your subclass to define the node without a meta.json file.
+    NODE_ID: str = ""             # e.g. "processing/image_operations/mask_ops"
+    NODE_NAME: str = ""           # e.g. "掩码操作"
+    NODE_CATEGORY: str = ""       # e.g. "图像运算"
+    NODE_SUBCATEGORY: str = ""    # optional
+    NODE_DESCRIPTION: str = ""
+    NODE_VERSION: str = "1.0.0"
+    NODE_INPUTS: list[dict] = []  # [{"name":"x", "type":"image", "label":"X"}, ...]
+    NODE_OUTPUTS: list[dict] = []
+    NODE_PARAMS: list[dict] = []  # [{"name":"p", "type":"combo", "default":...}, ...]
+
+    @classmethod
+    def build_meta(cls, node_dir: str = "") -> NodeMeta | None:
+        """Build a NodeMeta from class-level attributes. Returns None if NODE_ID is empty."""
+        if not cls.NODE_ID:
+            return None
+        return NodeMeta.from_json({
+            "id": cls.NODE_ID,
+            "name": cls.NODE_NAME or cls.__name__,
+            "category": cls.NODE_CATEGORY,
+            "subcategory": cls.NODE_SUBCATEGORY,
+            "description": cls.NODE_DESCRIPTION,
+            "version": cls.NODE_VERSION,
+            "inputs": cls.NODE_INPUTS,
+            "outputs": cls.NODE_OUTPUTS,
+            "params": cls.NODE_PARAMS,
+        }, node_dir)
+
     def __init__(self, meta: NodeMeta, instance_id: str = None):
         self.meta = meta
         self.instance_id = instance_id or f"{meta.id}_{id(self)}"
@@ -140,9 +165,13 @@ class NodeBase:
         for pdef in meta.outputs:
             self.output_ports[pdef.name] = Port(pdef)
 
+        import copy
         for p in meta.params:
             if p.default is not None:
-                self.params[p.name] = p.default
+                val = p.default
+                if isinstance(val, list):
+                    val = copy.copy(val)
+                self.params[p.name] = val
 
         logger.debug(f"Node created: {self.meta.name} ({self.instance_id})")
 
@@ -162,6 +191,26 @@ class NodeBase:
         raise NotImplementedError("Subclass must implement execute()")
 
     def _get_input_images(self, port_name: str) -> list:
+        """Return a list of raw numpy arrays from the given input port.
+
+        Automatically unwraps ImageData instances so existing processing
+        nodes continue to receive plain np.ndarray (backward compatible).
+        """
+        items = self._get_input_images_raw(port_name)
+        result = []
+        for item in items:
+            if isinstance(item, ImageData):
+                result.append(item.array)
+            else:
+                result.append(item)
+        return result
+
+    def _get_input_images_raw(self, port_name: str) -> list:
+        """Return raw port data including ImageData wrappers.
+
+        Use this when you need color space metadata in addition to
+        the pixel array (e.g. color conversion nodes).
+        """
         import numpy as np
         port = self.input_ports.get(port_name)
         if not port:
@@ -173,6 +222,8 @@ class NodeBase:
                 return [data]
             if isinstance(data, list):
                 return data
+            if isinstance(data, ImageData):
+                return [data]
             return [data]
 
         if not port.is_connected:
@@ -185,6 +236,8 @@ class NodeBase:
             return [data]
         if isinstance(data, list):
             return data
+        if isinstance(data, ImageData):
+            return [data]
         return [data]
 
     def _set_output_images(self, port_name: str, images: list):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib.util
+import importlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -81,10 +81,25 @@ class NodeRegistry:
         py_path = self._lazy_paths.pop(node_id)
         logger.info(f"Lazy loading: {node_id} from {py_path}")
         try:
-            module_name = f"nodes.{node_id.replace('/', '.')}"
-            spec = importlib.util.spec_from_file_location(module_name, py_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            import importlib.util
+            import sys
+
+            # Build canonical module name
+            module_name = f"nodes.{node_id.replace('/', '.')}.node"
+
+            # Already loaded?
+            if module_name in sys.modules:
+                module = sys.modules[module_name]
+                logger.debug("Module %s already in sys.modules, reusing", module_name)
+            else:
+                # Direct import — no __init__.py needed
+                spec = importlib.util.spec_from_file_location(module_name, str(py_path))
+                if spec is None:
+                    logger.error(f"Cannot create module spec for {py_path}")
+                    return None
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
 
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
@@ -123,7 +138,10 @@ class NodeRegistry:
         return self._build_tree_from_meta()
 
     def _build_tree_from_config(self) -> dict:
+        # Step 1: build tree from yaml config (controls ordering)
         tree: dict = {}
+        yaml_node_ids: set[str] = set()
+
         for cat_cfg in self._tree_config:
             cat_key = cat_cfg["key"]
             cat_name = cat_cfg.get("name", cat_key)
@@ -137,6 +155,7 @@ class NodeRegistry:
                     sub_key = sub_cfg["key"]
                     sub_name = sub_cfg.get("name", sub_key)
                     node_ids = [n["id"] for n in sub_cfg.get("nodes", [])]
+                    yaml_node_ids.update(node_ids)
                     metas = []
                     for nid in node_ids:
                         meta = self._meta_by_id.get(nid)
@@ -146,6 +165,7 @@ class NodeRegistry:
                         tree[cat_name][sub_name] = metas
             elif nodes_cfg:
                 node_ids = [n["id"] for n in nodes_cfg]
+                yaml_node_ids.update(node_ids)
                 metas = []
                 for nid in node_ids:
                     meta = self._meta_by_id.get(nid)
@@ -153,6 +173,19 @@ class NodeRegistry:
                         metas.append(meta)
                 if metas:
                     tree[cat_name]["_items"] = metas
+
+        # Step 2: append any registered nodes NOT in yaml to their category
+        for meta in self._meta_by_id.values():
+            if meta.id in yaml_node_ids:
+                continue
+            cat = meta.category or "_unclassified"
+            sub = meta.subcategory
+            if cat not in tree:
+                tree[cat] = {}
+            if sub:
+                tree[cat].setdefault(sub, []).append(meta)
+            else:
+                tree[cat].setdefault("_items", []).append(meta)
 
         return tree
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Callable, TYPE_CHECKING
 
 from core.events import EventEmitter
+from core.interfaces import INodeGraphProvider
 from core.logger import logger
 from core.node_base.registry import node_registry
 from systems.base import ISystem
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
     from NodeGraphQt import NodeGraph
 
 
-class BlueprintSystem(ISystem):
+class BlueprintSystem(ISystem, INodeGraphProvider):
     """System for managing the node graph and its operations.
 
     Wraps:

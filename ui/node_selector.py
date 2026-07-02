@@ -2,13 +2,13 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QPushButton, QScrollArea, QWidget, QGridLayout, QGroupBox,
-    QLineEdit, QSlider, QSpinBox, QDoubleSpinBox, QCheckBox,
     QFileDialog, QMessageBox, QFrame,
 )
 
 from core.logger import logger
 from core.node_base.registry import node_registry
 from core.node_base.node import ParamType
+from ui.param_widgets import create_param_widget, FileListParamWidget
 
 
 class NodeSelectorWindow(QDialog):
@@ -21,9 +21,7 @@ class NodeSelectorWindow(QDialog):
         self._target_node = None
         self._replace_mode = False
         self._edit_mode = False
-        self._param_widgets = {}
-        self._file_list_items = []
-        self._file_list_layout = None
+        self._param_widgets: dict[str, tuple] = {}  # {name: (ParamDefinition, ParamWidget)}
         self._current_meta = None
         self._init_ui()
         self._populate_category()
@@ -256,7 +254,8 @@ class NodeSelectorWindow(QDialog):
             if child.widget():
                 child.widget().deleteLater()
         self._param_widgets.clear()
-        self._file_list_items.clear()
+
+    # ── Parameter rendering ──────────────────────────────────────────
 
     def _show_params(self, meta):
         self._clear_params()
@@ -273,182 +272,125 @@ class NodeSelectorWindow(QDialog):
             for param in meta.params:
                 if param.depends_on:
                     continue
-
-                label = QLabel(param.label or param.name)
-                group_layout.addWidget(label, row, 0)
-
-                widget = self._create_param_widget(param)
-                if widget:
-                    group_layout.addWidget(widget, row, 1)
-                    self._param_widgets[param.name] = (param, widget)
-                row += 1
+                row = self._add_param_row(param, group_layout, row)
 
             for param in meta.params:
                 if param.depends_on:
-                    label = QLabel(param.label or param.name)
-                    group_layout.addWidget(label, row, 0)
-                    widget = self._create_param_widget(param)
-                    if widget:
-                        group_layout.addWidget(widget, row, 1)
-                        self._param_widgets[param.name] = (param, widget)
-                    row += 1
+                    row = self._add_param_row(param, group_layout, row)
 
             self._param_layout.addWidget(group)
 
+            # Generic dependency wiring (replaces hard-coded _wire_channel_type_dependency)
+            self._wire_dependencies(meta)
+
         self._param_layout.addStretch()
 
-    def _create_param_widget(self, param):
-        if param.param_type == ParamType.COMBO:
-            combo = QComboBox()
-            for opt in param.options:
-                combo.addItem(opt.label, opt.value)
+    def _add_param_row(self, param, layout: QGridLayout, row: int) -> int:
+        """Create a ParamWidget handler and add its widget to the grid.
 
-            if param.default is not None:
-                idx = combo.findData(param.default)
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
-            return combo
+        For regular params: [QLabel | widget]
+        For self-labeling params (CHANNEL_RANGE): [widget spans both columns]
+        """
+        handler = self._build_handler(param)
+        if handler is None:
+            return row + 1
 
-        elif param.param_type == ParamType.INT_SLIDER:
-            container = QWidget()
-            h = QHBoxLayout(container)
-            h.setContentsMargins(0, 0, 0, 0)
-            slider = QSlider(Qt.Orientation.Horizontal)
-            spin = QSpinBox()
-            slider.setMinimum(param.min_val or 0)
-            slider.setMaximum(param.max_val or 100)
-            slider.setSingleStep(param.step or 1)
-            slider.setValue(param.default or 0)
-            spin.setMinimum(param.min_val or 0)
-            spin.setMaximum(param.max_val or 100)
-            spin.setSingleStep(param.step or 1)
-            spin.setValue(param.default or 0)
-            slider.valueChanged.connect(spin.setValue)
-            spin.valueChanged.connect(slider.setValue)
-            h.addWidget(slider)
-            h.addWidget(spin)
-            return container
+        widget = handler.widget
+        if widget is None:
+            return row + 1
 
-        elif param.param_type == ParamType.FLOAT_SLIDER:
-            container = QWidget()
-            h = QHBoxLayout(container)
-            h.setContentsMargins(0, 0, 0, 0)
-            slider = QSlider(Qt.Orientation.Horizontal)
-            dspin = QDoubleSpinBox()
-            multiplier = 1000
-            slider.setMinimum(int((param.min_val or 0) * multiplier))
-            slider.setMaximum(int((param.max_val or 10) * multiplier))
-            slider.setSingleStep(int((param.step or 0.01) * multiplier))
-            slider.setValue(int((param.default or 0) * multiplier))
-            dspin.setMinimum(param.min_val or 0)
-            dspin.setMaximum(param.max_val or 10)
-            dspin.setSingleStep(param.step or 0.01)
-            dspin.setDecimals(3)
-            dspin.setValue(param.default or 0)
-            slider.valueChanged.connect(lambda v: dspin.setValue(v / multiplier))
-            dspin.valueChanged.connect(lambda v: slider.setValue(int(v * multiplier)))
-            h.addWidget(slider)
-            h.addWidget(dspin)
-            return container
+        if handler.needs_own_label():
+            layout.addWidget(widget, row, 0, 1, 2)
+        else:
+            label = QLabel(param.label or param.name)
+            layout.addWidget(label, row, 0)
+            layout.addWidget(widget, row, 1)
 
-        elif param.param_type == ParamType.TEXT:
-            edit = QLineEdit()
-            if param.default:
-                edit.setText(str(param.default))
-            return edit
+        self._param_widgets[param.name] = (param, handler)
+        return row + 1
 
-        elif param.param_type == ParamType.CHECKBOX:
-            cb = QCheckBox()
-            cb.setChecked(bool(param.default))
-            return cb
+    def _build_handler(self, param):
+        """Build a ParamWidget handler for a parameter definition.
 
-        elif param.param_type == ParamType.FILE_LIST:
-            container = QWidget()
-            layout = QVBoxLayout(container)
-            layout.setContentsMargins(0, 0, 0, 0)
+        FILE_LIST needs special treatment: its callbacks require the dialog
+        parent (self). All other types use the standard factory.
+        """
+        if param.param_type == ParamType.FILE_LIST:
+            filters = param.filters or "All Files (*)"
+            handler = FileListParamWidget(
+                param,
+                add_file_callback=lambda: self._on_add_files(param, filters),
+                add_folder_callback=lambda: self._on_add_folder(param),
+            )
+            handler.create_widget()
+            return handler
 
-            list_container = QWidget()
-            self._file_list_layout = QVBoxLayout(list_container)
-            self._file_list_layout.setContentsMargins(0, 0, 0, 0)
+        return create_param_widget(param)
 
-            btn_row = QHBoxLayout()
-            btn_add_file = QPushButton("+ 文件")
-            btn_add_folder = QPushButton("+ 文件夹")
-            btn_add_file.clicked.connect(lambda: self._add_file(param))
-            btn_add_folder.clicked.connect(lambda: self._add_folder(param))
-            btn_row.addWidget(btn_add_file)
-            btn_row.addWidget(btn_add_folder)
-            btn_row.addStretch()
+    # ── FileList callbacks (dialog parent = self) ───────────────────
 
-            layout.addWidget(list_container)
-            layout.addLayout(btn_row)
+    def _on_add_files(self, param, filters: str):
+        files, _ = QFileDialog.getOpenFileNames(self, "选择图像文件", "", filters)
+        handler = self._get_handler(param.name)
+        if handler and files:
+            for f in files:
+                handler.add_file_item(f)
 
-            self._file_list_widget = container
-            self._file_list_container = list_container
-            return container
+    def _on_add_folder(self, param):
+        folder = QFileDialog.getExistingDirectory(self, "选择文件夹")
+        handler = self._get_handler(param.name)
+        if handler and folder:
+            handler.add_file_item(folder)
 
-        return None
+    def _get_handler(self, param_name: str):
+        """Get the ParamWidget handler for a parameter name."""
+        entry = self._param_widgets.get(param_name)
+        return entry[1] if entry else None
+
+    # ── Generic dependency wiring ───────────────────────────────────
+
+    def _wire_dependencies(self, meta):
+        """Connect source param signals to dependent param callbacks.
+
+        For each parameter P where p.depends_on is set:
+          1. Find the source handler Q whose name matches p.depends_on.
+          2. Connect Q's value_changed_signal → P's on_dependency_change.
+          3. Fire an initial sync so P starts in the correct state.
+        """
+        for name, (param, handler) in self._param_widgets.items():
+            if not param.depends_on:
+                continue
+
+            source_name = param.depends_on
+            if source_name not in self._param_widgets:
+                continue
+
+            _, source_handler = self._param_widgets[source_name]
+            signal = source_handler.get_value_changed_signal()
+            if signal is not None:
+                signal.connect(
+                    lambda _unused=None, h=handler, sn=source_name, sh=source_handler:
+                        h.on_dependency_change(sn, sh.get_value())
+                )
+
+            # Initial sync
+            handler.on_dependency_change(source_name, source_handler.get_value())
+
+    # ── Value read / write (delegated to handlers) ──────────────────
 
     def _set_param_values(self, values: dict):
         for name, value in values.items():
-            if name not in self._param_widgets:
-                continue
-            param, widget = self._param_widgets[name]
+            handler = self._get_handler(name)
+            if handler:
+                handler.set_value(value)
 
-            if param.param_type == ParamType.COMBO:
-                idx = widget.findData(value)
-                if idx >= 0:
-                    widget.setCurrentIndex(idx)
+    def get_param_values(self) -> dict:
+        values = {}
+        for name, (param, handler) in self._param_widgets.items():
+            values[name] = handler.get_value()
+        return values
 
-            elif param.param_type == ParamType.INT_SLIDER:
-                spin = widget.findChild(QSpinBox)
-                if spin:
-                    spin.setValue(int(value))
-
-            elif param.param_type == ParamType.FLOAT_SLIDER:
-                dspin = widget.findChild(QDoubleSpinBox)
-                if dspin:
-                    dspin.setValue(float(value))
-
-            elif param.param_type == ParamType.TEXT:
-                widget.setText(str(value))
-
-            elif param.param_type == ParamType.CHECKBOX:
-                widget.setChecked(bool(value))
-
-            elif param.param_type == ParamType.FILE_LIST:
-                if isinstance(value, list):
-                    for f in value:
-                        self._add_file_item(f)
-
-    def _add_file(self, param):
-        filters = param.filters or "All Files (*)"
-        files, _ = QFileDialog.getOpenFileNames(self, "选择图像文件", "", filters)
-        for f in files:
-            self._add_file_item(f)
-
-    def _add_folder(self, param):
-        folder = QFileDialog.getExistingDirectory(self, "选择文件夹")
-        if folder:
-            self._add_file_item(folder)
-
-    def _add_file_item(self, path: str):
-        item_widget = QWidget()
-        h = QHBoxLayout(item_widget)
-        h.setContentsMargins(0, 2, 0, 2)
-        label = QLabel(path)
-        label.setWordWrap(True)
-        btn_remove = QPushButton("×")
-        btn_remove.setMaximumWidth(30)
-        btn_remove.clicked.connect(lambda: self._remove_file_item(item_widget))
-        h.addWidget(label)
-        h.addWidget(btn_remove)
-        self._file_list_layout.addWidget(item_widget)
-        self._file_list_items.append(item_widget)
-
-    def _remove_file_item(self, widget):
-        self._file_list_items.remove(widget)
-        widget.deleteLater()
+    # ── OK / Replace ────────────────────────────────────────────────
 
     def _on_ok(self):
         node_id = self._combo_node.currentData()
@@ -484,29 +426,3 @@ class NodeSelectorWindow(QDialog):
 
     def get_selected_node_id(self) -> str:
         return self._combo_node.currentData() or ""
-
-    def get_param_values(self) -> dict:
-        values = {}
-        for name, (param, widget) in self._param_widgets.items():
-            if param.param_type == ParamType.COMBO:
-                values[name] = widget.currentData()
-            elif param.param_type == ParamType.INT_SLIDER:
-                spin = widget.findChild(QSpinBox)
-                if spin:
-                    values[name] = spin.value()
-            elif param.param_type == ParamType.FLOAT_SLIDER:
-                dspin = widget.findChild(QDoubleSpinBox)
-                if dspin:
-                    values[name] = dspin.value()
-            elif param.param_type == ParamType.TEXT:
-                values[name] = widget.text()
-            elif param.param_type == ParamType.CHECKBOX:
-                values[name] = widget.isChecked()
-            elif param.param_type == ParamType.FILE_LIST:
-                files = []
-                for item_widget in self._file_list_items:
-                    label = item_widget.findChild(QLabel)
-                    if label:
-                        files.append(label.text())
-                values[name] = files
-        return values
