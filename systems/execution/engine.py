@@ -65,13 +65,10 @@ class ExecutionEngine(IExecutionProvider):
                 logger.warning(f"Node {gn.name()} has no type, skipping")
                 continue
 
-            info = PipelineNodeInfo(
-                node_id=node_id,
-                name=gn.name(),
-                param_values=dict(getattr(gn, "_param_values", {})),
-                port_label_to_name=dict(getattr(gn, "_port_label_to_name", {})),
-            )
+            # Use GraphNode.to_pipeline_info() as single source of truth
+            info = gn.to_pipeline_info()
             node_infos[gn] = info
+            logger.info(f"[Engine] Node '{gn.name()}': {info}")
 
             exec_node = node_registry.create_node(node_id)
             if exec_node:

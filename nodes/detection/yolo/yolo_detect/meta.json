@@ -15,10 +15,15 @@
     ],
     "outputs": [
         {
-            "name": "images",
-            "type": "image",
-            "label": "标注图像"
+            "name": "rois",
+            "type": "roi",
+            "label": "检测区域"
         }
+    ],
+    "optional_ports": [
+        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
+        {"name": "forbidden", "label": "禁止区域", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
+        {"name": "annotated", "label": "标注图像", "port_type": "image", "direction": "output", "default": false, "group": "output"}
     ],
     "params": [
         {

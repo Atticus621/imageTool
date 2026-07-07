@@ -65,6 +65,12 @@ class ColorFilterNode(NodeBase):
         mask   — binary mask (0 or 255) as single-channel GRAY image.
     """
 
+    NODE_ID = "processing/color_conversion/color_filter"
+    NODE_NAME = "颜色滤波"
+    NODE_CATEGORY = "图像处理"
+    NODE_SUBCATEGORY = "颜色转换"
+    NODE_DESCRIPTION = "按通道值范围滤波图像，输出滤波后图像和掩码"
+
     def execute(self) -> bool:
         channel_type = self.params.get("channel_type", "rgb")
 
@@ -113,6 +119,12 @@ class ColorFilterNode(NodeBase):
         )
 
         # ── Process ───────────────────────────────────────────────────
+        rois = self._get_input_rois("roi")
+        roi_mgr = None
+        if rois:
+            from core.roi import ROIManager
+            roi_mgr = ROIManager.instance()
+
         results: list[ImageData] = []
         masks: list[ImageData] = []
         for item in raw_items:
@@ -126,6 +138,11 @@ class ColorFilterNode(NodeBase):
             filtered, mask_arr = self._filter_image_multi(
                 img, original_space, channel_type, clamped,
             )
+
+            # Apply ROI constraint if connected
+            if roi_mgr and rois:
+                filtered = roi_mgr.apply_constraint(img, filtered, rois)
+
             results.append(ImageData(array=filtered, color_space=original_space))
             masks.append(ImageData(array=mask_arr, color_space=ColorSpace.GRAY.value))
 

@@ -1,91 +1,70 @@
-"""YOLO 检测节点 — 使用 ultralytics YOLOv8+ 模型进行目标检测。
-
-功能：
-- 加载 .pt 模型文件
-- 读取模型支持的检测类别
-- 对输入图像执行检测
-- 输出标注后的图像和类别列表
-"""
+"""YOLO detection node — uses ultralytics YOLOv8+ for object detection."""
 
 import numpy as np
 
 from core.logger import logger
-from core.node_base.node import NodeBase, NodeState
+from core.roi import ROIManager
+from nodes.detection.detection_base import DetectionBase
 
 
-class YoloDetectNode(NodeBase):
+class YoloDetectNode(DetectionBase):
     """YOLO 目标检测节点。"""
 
-    def execute(self) -> bool:
-        # 1. 读取参数
+    NODE_ID = "detection/yolo/yolo_detect"
+    NODE_NAME = "YOLO检测"
+    NODE_CATEGORY = "检测"
+    NODE_SUBCATEGORY = "YOLO"
+    NODE_DESCRIPTION = "使用 ultralytics YOLOv8+ 模型进行目标检测"
+
+    def _get_detection_params(self) -> dict:
         model_path_param = self.params.get("model_path", [])
-        # file_list 类型返回列表，取第一个文件
         if isinstance(model_path_param, list):
             model_path = model_path_param[0] if model_path_param else ""
         else:
             model_path = str(model_path_param).strip()
 
-        conf_threshold = self.params.get("conf_threshold", 0.25)
-        iou_threshold = self.params.get("iou_threshold", 0.45)
+        return {
+            "model_path": model_path,
+            "conf_threshold": self.params.get("conf_threshold", 0.25),
+            "iou_threshold": self.params.get("iou_threshold", 0.45),
+        }
 
+    def _detect(
+        self, img: np.ndarray, color_space: str, **params
+    ) -> tuple[np.ndarray | None, list]:
+        model_path = params["model_path"]
         if not model_path:
-            logger.error(f"[{self.meta.name}] 未指定模型文件路径，请在参数中选择 .pt 文件")
-            self.set_state(NodeState.ERROR)
-            return False
+            logger.error(f"[{self.meta.name}] 未指定模型文件路径")
+            return None, []
 
-        # 2. 加载模型
         try:
             from ultralytics import YOLO
             model = YOLO(model_path)
         except Exception as e:
             logger.error(f"[{self.meta.name}] 加载模型失败: {e}")
-            self.set_state(NodeState.ERROR)
-            return False
+            return None, []
 
-        # 3. 读取类别名称（仅日志记录）
-        class_names = model.names  # {0: 'person', 1: 'bicycle', ...}
-        logger.info(f"[{self.meta.name}] 模型类别 ({len(class_names)}): {', '.join(class_names.values())}")
-
-        # 4. 获取输入图像
-        input_images = self._get_input_images("images")
-        if not input_images:
-            logger.warning(f"[{self.meta.name}] 无输入图像")
-            self.set_state(NodeState.ERROR)
-            return False
-
-        # 5. 执行检测
-        results = []
-        total_detections = 0
-        for img in input_images:
-            try:
-                # ultralytics 接受 numpy 数组（BGR 格式）
-                det_results = model(
-                    img,
-                    conf=conf_threshold,
-                    iou=iou_threshold,
-                    verbose=False,
-                )
-                # 获取标注后的图像
-                annotated = det_results[0].plot()
-                results.append(annotated)
-
-                # 统计检测数量
-                num_det = len(det_results[0].boxes)
-                total_detections += num_det
-                logger.debug(
-                    f"[{self.meta.name}] 检测到 {num_det} 个目标"
-                )
-            except Exception as e:
-                logger.error(f"[{self.meta.name}] 检测失败: {e}")
-                # 检测失败时输出原图
-                results.append(img.copy())
-
-        # 6. 设置输出
-        self._set_output_images("images", results)
-
-        logger.info(
-            f"[{self.meta.name}] 处理完成: {len(results)} 张图像, "
-            f"共 {total_detections} 个检测结果"
+        det_results = model(
+            img,
+            conf=params["conf_threshold"],
+            iou=params["iou_threshold"],
+            verbose=False,
         )
-        self.set_state(NodeState.SUCCESS)
-        return True
+
+        annotated = det_results[0].plot()
+
+        rois = []
+        roi_mgr = ROIManager.instance()
+        h, w = img.shape[:2]
+
+        for box in det_results[0].boxes:
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+            rois.append(roi_mgr.create(
+                roi_type="rectangle",
+                data=(float(x1), float(y1), float(x2 - x1), float(y2 - y1)),
+                image_size=(w, h),
+                source_node=self.meta.name,
+                metadata={"confidence": float(box.conf[0])},
+            ))
+
+        return annotated, rois

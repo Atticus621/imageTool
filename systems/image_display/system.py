@@ -13,6 +13,7 @@ from PySide6.QtGui import QPixmap
 
 from core.events import EventEmitter
 from core.interfaces import IImageDisplayProvider
+from core.system.auto_register import register_system
 from systems.base import ISystem
 from systems.image_display.converter import compute_display_info, cv2_to_qpixmap
 from systems.image_display.models import DisplayInfo
@@ -23,6 +24,11 @@ if TYPE_CHECKING:
     from systems.registry import SystemRegistry
 
 
+@register_system(
+    name="ImageDisplay",
+    depends_on=[],
+    auto_wire=False,  # 不需要绑定 graph
+)
 class ImageDisplaySystem(ISystem, IImageDisplayProvider):
     """System that owns all image-to-Qt-display conversion logic.
 

@@ -11,3 +11,7 @@ logs/*.log.*
 *.egg
 .venv/
 venv/
+.mimocode/
+.pytest_cache/
+projrcts/
+**/*.itproj

@@ -25,6 +25,7 @@ class GraphNode(BaseNode):
         self._output_image_count = 0
         self._state = "idle"
         self._param_values = {}
+        self._embedded_widget = None
 
     def set_node_meta(self, meta):
         self._node_id = meta.id
@@ -33,6 +34,7 @@ class GraphNode(BaseNode):
 
         self._port_label_to_name = {}
         self._port_count_groups: dict[str, list[str]] = {}  # count_param → [port_label, ...]
+        self._optional_ports: dict[str, str] = {}  # opc_name → port_label
 
         for pdef in meta.inputs:
             port_name = pdef.label or pdef.name
@@ -52,8 +54,33 @@ class GraphNode(BaseNode):
             if p.default is not None:
                 self._param_values[p.name] = p.default
 
+        # ── 可选端口（预创建，默认隐藏） ──
+        for opc in meta.optional_ports:
+            port_label = opc.label or opc.name
+            if opc.direction == "input":
+                self.add_input(port_label, multi_input=True, display_name=True)
+                port = self.get_input(port_label)
+                if port:
+                    port.set_visible(opc.default, push_undo=False)
+            else:
+                self.add_output(port_label, multi_output=True, display_name=True)
+                port = self.get_output(port_label)
+                if port:
+                    port.set_visible(opc.default, push_undo=False)
+            self._optional_ports[opc.name] = port_label
+            self._port_label_to_name[port_label] = opc.name
+            self._param_values[f"_opt_{opc.name}"] = opc.default
+
         # Apply initial visibility
         self._apply_port_count_visibility()
+
+    def add_embedded_widget(self, widget):
+        """Add an embedded widget (NodeBaseWidget) to this node."""
+        self._embedded_widget = widget
+        self.add_custom_widget(widget, widget_type=None)
+
+    def get_embedded_widget(self):
+        return self._embedded_widget
 
     def _apply_port_count_visibility(self):
         """Show/hide input ports based on count_param and current _param_values."""
@@ -69,6 +96,30 @@ class GraphNode(BaseNode):
     def sync_port_visibility(self):
         """Public method called after _param_values is updated from UI."""
         self._apply_port_count_visibility()
+
+    def set_optional_port_visible(self, opc_name: str, visible: bool):
+        """实时显示/隐藏可选端口。
+
+        Args:
+            opc_name: 可选端口名称（如 "roi", "forbidden"）
+            visible: 是否可见
+        """
+        port_label = self._optional_ports.get(opc_name)
+        if not port_label:
+            logger.warning(f"Optional port '{opc_name}' not found. Available: {list(self._optional_ports.keys())}")
+            return
+
+        # 尝试作为输入端口
+        port = self.get_input(port_label)
+        if port is None:
+            # 尝试作为输出端口
+            port = self.get_output(port_label)
+        if port:
+            port.set_visible(visible, push_undo=False)
+            self._param_values[f"_opt_{opc_name}"] = visible
+            logger.info(f"[GraphNode] Optional port '{opc_name}' ({port_label}) visibility -> {visible}, _param_values={self._param_values}")
+        else:
+            logger.warning(f"[GraphNode] Port object not found for '{opc_name}' (label='{port_label}')")
 
     def update_state_color(self, state: str):
         self._state = state

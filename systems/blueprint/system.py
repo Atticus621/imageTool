@@ -13,6 +13,7 @@ from core.events import EventEmitter
 from core.interfaces import INodeGraphProvider
 from core.logger import logger
 from core.node_base.registry import node_registry
+from core.system.auto_register import register_system
 from systems.base import ISystem
 from systems.blueprint.bridge_handler import BridgeCommandHandler
 from systems.blueprint.node_factory import NodeFactory
@@ -21,6 +22,11 @@ if TYPE_CHECKING:
     from NodeGraphQt import NodeGraph
 
 
+@register_system(
+    name="Blueprint",
+    depends_on=[],
+    auto_wire=True,
+)
 class BlueprintSystem(ISystem, INodeGraphProvider):
     """System for managing the node graph and its operations.
 

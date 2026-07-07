@@ -29,6 +29,9 @@ class MorphologyNode(NodeBase):
     NODE_OUTPUTS = [
         {"name": "images", "type": "image", "label": "图像输出"},
     ]
+    NODE_OPTIONAL_PORTS = [
+        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": False, "group": "input"},
+    ]
     NODE_PARAMS = [
         {
             "name": "operation", "type": "combo", "label": "操作类型", "default": "open",
@@ -103,6 +106,12 @@ class MorphologyNode(NodeBase):
         shape = self._KERNEL_SHAPES.get(kernel_shape, cv2.MORPH_RECT)
         kernel = cv2.getStructuringElement(shape, (kernel_size, kernel_size))
 
+        rois = self._get_input_rois("roi")
+        roi_mgr = None
+        if rois:
+            from core.roi import ROIManager
+            roi_mgr = ROIManager.instance()
+
         results: list[ImageData] = []
 
         for item in items:
@@ -117,6 +126,10 @@ class MorphologyNode(NodeBase):
                 continue
 
             processed = self._apply_morphology(img, operation, kernel, iterations, color_mode, color_space)
+
+            # Apply ROI constraint if connected
+            if roi_mgr and rois:
+                processed = roi_mgr.apply_constraint(img, processed, rois)
 
             # When converting to grayscale, the output color space becomes GRAY
             out_space = ColorSpace.GRAY.value if color_mode == "grayscale" and not _is_grayscale(img) else color_space

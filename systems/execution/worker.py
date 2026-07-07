@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import threading
 
+import numpy as np
+
 from core.events import EventEmitter
+from core.image_data import ImageData
 from core.logger import logger
 from core.node_base.node import NodeBase, NodeState
 from core.pipeline import PipelineNodeInfo
@@ -74,6 +77,7 @@ class ExecutionWorker:
 
             try:
                 exec_node.params.update(info.param_values)
+                exec_node.graph_node_name = graph_node.name()
                 logger.info(f"  Params: {exec_node.params}")
 
                 self._feed_input_data(graph_node, exec_node, info)
@@ -98,7 +102,7 @@ class ExecutionWorker:
     def _feed_input_data(self, graph_node, exec_node: NodeBase, info: PipelineNodeInfo):
         for port in graph_node.input_ports():
             graph_port_name = port.name()
-            exec_port_name = info.port_label_to_name.get(graph_port_name, graph_port_name)
+            exec_port_name = info.resolve_port_name(graph_port_name)
             target_port = exec_node.get_input_port(exec_port_name)
             if target_port is None:
                 logger.warning(f"  Input port not found: {exec_port_name}")
@@ -114,7 +118,7 @@ class ExecutionWorker:
                         src_info = self._node_infos.get(src_node)
                         src_port_name = src_port.name()
                         src_exec_port_name = (
-                            src_info.port_label_to_name.get(src_port_name, src_port_name)
+                            src_info.resolve_port_name(src_port_name)
                             if src_info else src_port_name
                         )
                         src_output = src_exec.get_output_port(src_exec_port_name)
@@ -133,6 +137,47 @@ class ExecutionWorker:
                         f"  Fed total {len(all_images)} images -> {exec_port_name}"
                     )
 
+    def _get_image_entries_for_node(self, graph_node, exec_node, info):
+        """Get all image entries from a node's output ports that contain actual images.
+
+        Only considers data that is numpy arrays or ImageData objects.
+        Skips non-image data like ROI lists, text, numbers, etc.
+        """
+        entries = []
+        for port in graph_node.output_ports():
+            exec_port_name = info.resolve_port_name(port.name())
+            exec_port = exec_node.get_output_port(exec_port_name)
+
+            if exec_port is None:
+                logger.warning(
+                    f"  [{info.name}] Port '{port.name()}' -> exec port '{exec_port_name}' NOT FOUND"
+                )
+                continue
+
+            if exec_port.data is None:
+                logger.debug(
+                    f"  [{info.name}] Port '{port.name()}' -> exec port '{exec_port_name}' data is None"
+                )
+                continue
+
+            data = exec_port.data
+            items = data if isinstance(data, list) else [data]
+            images = [
+                item for item in items
+                if isinstance(item, (np.ndarray, ImageData))
+            ]
+            if images:
+                logger.info(
+                    f"  [{info.name}] Port '{port.name()}' -> '{exec_port_name}': "
+                    f"{len(images)} images"
+                )
+                entry = ImageSetEntry(
+                    name=f"{info.name}:{port.name()}",
+                    images=images,
+                )
+                entries.append(entry)
+        return entries
+
     def _collect_image_sets(self, success: bool) -> ExecutionResult:
         input_sets = []
         output_sets = []
@@ -149,21 +194,42 @@ class ExecutionWorker:
                 p.connected_ports() for p in graph_node.input_ports()
             )
 
-            for port in graph_node.output_ports():
-                exec_port_name = info.port_label_to_name.get(port.name(), port.name())
-                exec_port = exec_node.get_output_port(exec_port_name)
-                if exec_port and exec_port.data is not None:
-                    data = exec_port.data
-                    images = data if isinstance(data, list) else [data]
-                    if images:
-                        entry = ImageSetEntry(
-                            name=f"{info.name}:{port.name()}",
-                            images=images,
-                        )
-                        if not has_upstream:
-                            input_sets.append(entry)
-                        if not has_downstream:
-                            output_sets.append(entry)
+            entries = self._get_image_entries_for_node(graph_node, exec_node, info)
+            for entry in entries:
+                if not has_upstream:
+                    input_sets.append(entry)
+                if not has_downstream:
+                    output_sets.append(entry)
+
+        # Fallback: if output_sets is empty, walk upstream from terminal nodes
+        # to find the nearest node that actually outputs images.
+        if not output_sets:
+            logger.info("Output sets empty, searching upstream for image data...")
+            for graph_node in reversed(self._sorted_nodes):
+                exec_node = self._exec_nodes.get(graph_node)
+                info = self._node_infos.get(graph_node)
+                if exec_node is None or info is None:
+                    continue
+                entries = self._get_image_entries_for_node(graph_node, exec_node, info)
+                if entries:
+                    logger.info(f"  Fallback found images from: {info.name}")
+                    output_sets.extend(entries)
+                    break
+
+        # Fallback: if input_sets is empty, walk downstream from source nodes
+        # to find the nearest node that actually outputs images.
+        if not input_sets:
+            logger.info("Input sets empty, searching downstream for image data...")
+            for graph_node in self._sorted_nodes:
+                exec_node = self._exec_nodes.get(graph_node)
+                info = self._node_infos.get(graph_node)
+                if exec_node is None or info is None:
+                    continue
+                entries = self._get_image_entries_for_node(graph_node, exec_node, info)
+                if entries:
+                    logger.info(f"  Fallback found images from: {info.name}")
+                    input_sets.extend(entries)
+                    break
 
         logger.info(
             f"Collected {len(input_sets)} input sets, "

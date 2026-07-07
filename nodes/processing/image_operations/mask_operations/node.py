@@ -33,6 +33,9 @@ class MaskOperationsNode(NodeBase):
     NODE_OUTPUTS = [
         {"name": "mask", "type": "image", "label": "运算结果"},
     ]
+    NODE_OPTIONAL_PORTS = [
+        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": False, "group": "input"},
+    ]
     NODE_PARAMS = [
         {
             "name": "operation", "type": "combo", "label": "逻辑运算", "default": "and",
@@ -105,6 +108,14 @@ class MaskOperationsNode(NodeBase):
 
         # Convert back to uint8 mask (0 or 255)
         result = (result_bool.astype(np.uint8)) * 255
+
+        # Apply ROI constraint if connected
+        rois = self._get_input_rois("roi")
+        if rois:
+            from core.roi import ROIManager
+            roi_mgr = ROIManager.instance()
+            original = (normalized[0].astype(np.uint8)) * 255
+            result = roi_mgr.apply_constraint(original, result, rois)
 
         self._set_output_images("mask", [ImageData(array=result, color_space=ColorSpace.GRAY.value)])
 

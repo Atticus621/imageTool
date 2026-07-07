@@ -8,6 +8,7 @@ from typing import Any
 from core.logger import logger
 from core.image_data import ImageData
 from .port import Port, PortDefinition, PortDirection, PortType
+from .port_config import PortConfig
 
 
 class NodeState(Enum):
@@ -68,6 +69,7 @@ class NodeMeta:
     inputs: list[PortDefinition] = field(default_factory=list)
     outputs: list[PortDefinition] = field(default_factory=list)
     params: list[ParamDefinition] = field(default_factory=list)
+    optional_ports: list[PortConfig] = field(default_factory=list)
     node_dir: str = ""
 
     @classmethod
@@ -106,6 +108,10 @@ class NodeMeta:
                 depends_on=p.get("depends_on", ""),
             ))
 
+        optional_ports = []
+        for p in data.get("optional_ports", []):
+            optional_ports.append(PortConfig.from_dict(p))
+
         return cls(
             id=data["id"],
             name=data["name"],
@@ -117,6 +123,7 @@ class NodeMeta:
             inputs=inputs,
             outputs=outputs,
             params=params,
+            optional_ports=optional_ports,
             node_dir=node_dir,
         )
 
@@ -133,6 +140,7 @@ class NodeBase:
     NODE_INPUTS: list[dict] = []  # [{"name":"x", "type":"image", "label":"X"}, ...]
     NODE_OUTPUTS: list[dict] = []
     NODE_PARAMS: list[dict] = []  # [{"name":"p", "type":"combo", "default":...}, ...]
+    NODE_OPTIONAL_PORTS: list[dict] = []  # [{"name":"roi", "label":"ROI", "port_type":"roi", ...}, ...]
 
     @classmethod
     def build_meta(cls, node_dir: str = "") -> NodeMeta | None:
@@ -149,6 +157,7 @@ class NodeBase:
             "inputs": cls.NODE_INPUTS,
             "outputs": cls.NODE_OUTPUTS,
             "params": cls.NODE_PARAMS,
+            "optional_ports": cls.NODE_OPTIONAL_PORTS,
         }, node_dir)
 
     def __init__(self, meta: NodeMeta, instance_id: str = None):
@@ -164,6 +173,28 @@ class NodeBase:
             self.input_ports[pdef.name] = Port(pdef)
         for pdef in meta.outputs:
             self.output_ports[pdef.name] = Port(pdef)
+
+        # Also create ports from optional_ports so they exist at execution time
+        for opc in meta.optional_ports:
+            port_type_str = opc.port_type or "any"
+            try:
+                port_type = PortType(port_type_str)
+            except ValueError:
+                port_type = PortType.ANY
+            direction = PortDirection.INPUT if opc.direction == "input" else PortDirection.OUTPUT
+            pdef = PortDefinition(
+                name=opc.name,
+                port_type=port_type,
+                direction=direction,
+                multi=True,
+                label=opc.label or opc.name,
+            )
+            if direction == PortDirection.INPUT:
+                if opc.name not in self.input_ports:
+                    self.input_ports[opc.name] = Port(pdef)
+            else:
+                if opc.name not in self.output_ports:
+                    self.output_ports[opc.name] = Port(pdef)
 
         import copy
         for p in meta.params:
@@ -244,6 +275,56 @@ class NodeBase:
         port = self.output_ports.get(port_name)
         if port:
             port.set_data(images)
+
+    # ── ROI 端口方法 ────────────────────────────────────────────────
+
+    def _get_input_roi(self, port_name: str):
+        """从指定端口获取单个 ROIData。
+
+        Returns:
+            ROIData 或 None（端口未连接或无数据时）。
+        """
+        from core.roi import ROIData
+
+        port = self.input_ports.get(port_name)
+        if not port or not port.is_connected:
+            return None
+        data = port.get_data()
+        if isinstance(data, ROIData):
+            return data
+        if isinstance(data, list) and data and isinstance(data[0], ROIData):
+            return data[0]
+        return None
+
+    def _get_input_rois(self, port_name: str) -> list:
+        """从指定端口获取多个 ROIData。
+
+        Returns:
+            ROIData 列表。端口未连接时返回空列表。
+        """
+        from core.roi import ROIData
+
+        port = self.input_ports.get(port_name)
+        if not port or not port.is_connected:
+            return []
+        data = port.get_data()
+        if isinstance(data, ROIData):
+            return [data]
+        if isinstance(data, list):
+            return [d for d in data if isinstance(d, ROIData)]
+        return []
+
+    def _set_output_roi(self, port_name: str, roi):
+        """向指定端口输出单个 ROIData。"""
+        port = self.output_ports.get(port_name)
+        if port:
+            port.set_data(roi)
+
+    def _set_output_rois(self, port_name: str, rois: list):
+        """向指定端口输出多个 ROIData 列表。"""
+        port = self.output_ports.get(port_name)
+        if port:
+            port.set_data(rois)
 
     def set_state(self, state: NodeState):
         self.state = state

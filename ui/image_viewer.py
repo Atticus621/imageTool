@@ -21,7 +21,7 @@ from ui.widgets.coordinate_mapper import CoordinateMapper
 
 from core.image_data import ImageData
 from core.logger import logger
-from core.engine.result import ExecutionResult
+from systems.execution.result import ExecutionResult
 from core.interfaces import IImageDisplayProvider
 from systems.image_display.models import DisplayInfo
 from ui.widgets.ruler_overlay import RulerOverlay

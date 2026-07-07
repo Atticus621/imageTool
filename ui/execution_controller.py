@@ -38,7 +38,7 @@ class ExecutionController(QObject):
 
     def __init__(
         self,
-        engine,                     # core.engine.executor.ExecutionEngine
+        engine,                     # ui.qt_engine.QtExecutionEngine
         graph_getter: Callable,     # () -> NodeGraphQt.NodeGraph
         on_before_execute: Callable | None = None,
         parent: QObject | None = None,

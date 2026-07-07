@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QPushButton, QScrollArea, QWidget, QGridLayout, QGroupBox,
-    QFileDialog, QMessageBox, QFrame,
+    QFileDialog, QMessageBox, QFrame, QCheckBox,
 )
 
 from core.logger import logger
@@ -22,6 +22,7 @@ class NodeSelectorWindow(QDialog):
         self._replace_mode = False
         self._edit_mode = False
         self._param_widgets: dict[str, tuple] = {}  # {name: (ParamDefinition, ParamWidget)}
+        self._optional_port_checkboxes: dict[str, QCheckBox] = {}  # {opc_name: QCheckBox}
         self._current_meta = None
         self._init_ui()
         self._populate_category()
@@ -254,6 +255,7 @@ class NodeSelectorWindow(QDialog):
             if child.widget():
                 child.widget().deleteLater()
         self._param_widgets.clear()
+        self._optional_port_checkboxes.clear()
 
     # ── Parameter rendering ──────────────────────────────────────────
 
@@ -264,6 +266,37 @@ class NodeSelectorWindow(QDialog):
         info_label.setWordWrap(True)
         self._param_layout.addWidget(info_label)
 
+        # ── 输入参数门（可折叠） ──
+        input_opcs = [p for p in meta.optional_ports if p.direction == "input"]
+        input_group = self._create_collapsible_group("输入参数")
+        input_layout = QVBoxLayout(input_group)
+        if input_opcs:
+            for opc in input_opcs:
+                self._add_optional_port_checkbox(opc, input_layout)
+        else:
+            lbl = QLabel("无可配置输入端口")
+            lbl.setStyleSheet("color: gray;")
+            input_layout.addWidget(lbl)
+        input_group.toggled.connect(lambda checked, g=input_group: self._toggle_group_content(g, checked))
+        self._param_layout.addWidget(input_group)
+        self._finalize_collapsible_group(input_group)
+
+        # ── 输出参数门（可折叠） ──
+        output_opcs = [p for p in meta.optional_ports if p.direction == "output"]
+        output_group = self._create_collapsible_group("输出参数")
+        output_layout = QVBoxLayout(output_group)
+        if output_opcs:
+            for opc in output_opcs:
+                self._add_optional_port_checkbox(opc, output_layout)
+        else:
+            lbl = QLabel("无可配置输出端口")
+            lbl.setStyleSheet("color: gray;")
+            output_layout.addWidget(lbl)
+        output_group.toggled.connect(lambda checked, g=output_group: self._toggle_group_content(g, checked))
+        self._param_layout.addWidget(output_group)
+        self._finalize_collapsible_group(output_group)
+
+        # ── 函数参数 ──
         if meta.params:
             group = QGroupBox("函数参数")
             group_layout = QGridLayout(group)
@@ -280,10 +313,73 @@ class NodeSelectorWindow(QDialog):
 
             self._param_layout.addWidget(group)
 
-            # Generic dependency wiring (replaces hard-coded _wire_channel_type_dependency)
+            # Generic dependency wiring
             self._wire_dependencies(meta)
 
+        # ── 高级参数门（可折叠，暂时为空） ──
+        advanced_group = self._create_collapsible_group("高级参数")
+        advanced_layout = QVBoxLayout(advanced_group)
+        lbl = QLabel("暂无高级参数")
+        lbl.setStyleSheet("color: gray;")
+        advanced_layout.addWidget(lbl)
+        advanced_group.toggled.connect(lambda checked, g=advanced_group: self._toggle_group_content(g, checked))
+        self._param_layout.addWidget(advanced_group)
+        self._finalize_collapsible_group(advanced_group)
+
         self._param_layout.addStretch()
+
+    def _create_collapsible_group(self, title: str) -> QGroupBox:
+        """创建可折叠的 QGroupBox（默认折叠）。"""
+        group = QGroupBox(title)
+        group.setCheckable(True)
+        group.setChecked(False)
+        return group
+
+    def _finalize_collapsible_group(self, group: QGroupBox):
+        """初始化折叠状态：setChecked(False) 时隐藏内容。"""
+        checked = group.isChecked()
+        layout = group.layout()
+        if layout:
+            for i in range(layout.count()):
+                item = layout.itemAt(i)
+                if item and item.widget():
+                    item.widget().setVisible(checked)
+
+    def _toggle_group_content(self, group: QGroupBox, checked: bool):
+        """折叠/展开分组内容。"""
+        layout = group.layout()
+        if layout:
+            for i in range(layout.count()):
+                item = layout.itemAt(i)
+                if item and item.widget():
+                    item.widget().setVisible(checked)
+
+    def _add_optional_port_checkbox(self, opc, layout: QVBoxLayout):
+        """添加可选端口复选框（仅记录状态，不实时生效）。
+
+        优先从节点当前状态读取值，否则用 meta 默认值。
+        """
+        # 从节点 _param_values 读取当前状态
+        current = opc.default
+        if self._target_node and hasattr(self._target_node, '_param_values'):
+            current = self._target_node._param_values.get(f"_opt_{opc.name}", opc.default)
+            logger.debug(f"[OptionalPort] Checkbox '{opc.name}': reading _opt_{opc.name}={current}, param_values={self._target_node._param_values}")
+
+        checkbox = QCheckBox(opc.label or opc.name)
+        checkbox.setChecked(current)
+        checkbox.setToolTip(f"控制是否启用 {opc.label} 端口（点确定后生效）")
+        layout.addWidget(checkbox)
+        self._optional_port_checkboxes[opc.name] = checkbox
+
+    def _apply_optional_port_changes(self):
+        """将所有可选端口的勾选状态应用到节点（点确定时调用）。"""
+        if not self._target_node or not hasattr(self._target_node, 'set_optional_port_visible'):
+            logger.debug(f"[OptionalPort] Skip: target_node={self._target_node}, has_method={hasattr(self._target_node, 'set_optional_port_visible') if self._target_node else 'N/A'}")
+            return
+        for opc_name, checkbox in self._optional_port_checkboxes.items():
+            checked = checkbox.isChecked()
+            logger.info(f"[OptionalPort] Applying '{opc_name}' -> {checked}")
+            self._target_node.set_optional_port_visible(opc_name, checked)
 
     def _add_param_row(self, param, layout: QGridLayout, row: int) -> int:
         """Create a ParamWidget handler and add its widget to the grid.
@@ -396,6 +492,9 @@ class NodeSelectorWindow(QDialog):
         node_id = self._combo_node.currentData()
         if not node_id:
             return
+
+        # 应用可选端口变更
+        self._apply_optional_port_changes()
 
         if self._replace_mode and self._target_node:
             self._do_replace(node_id)

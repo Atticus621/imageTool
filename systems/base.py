@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from systems.registry import SystemRegistry
@@ -20,6 +20,10 @@ class ISystem(ABC):
         Override register_subsystems(registry) to register child
         systems via registry.register(child, parent=self.name).
         The default implementation does nothing.
+
+    Auto-wiring:
+        Override wire(**kwargs) to receive dependencies from the UI.
+        The default implementation stores kwargs as attributes.
     """
 
     @property
@@ -42,6 +46,21 @@ class ISystem(ABC):
     def shutdown(self) -> None:
         """Called once at shutdown. Must be idempotent."""
         ...
+
+    def wire(self, **kwargs: Any) -> None:
+        """Wire the system to UI components.
+
+        Called by MainWindow after UI is created. Override in subclasses
+        to receive specific dependencies (e.g., graph_getter).
+
+        The default implementation stores kwargs as attributes for
+        backward compatibility.
+
+        Args:
+            **kwargs: Dependencies to wire (e.g., graph_getter).
+        """
+        for key, value in kwargs.items():
+            setattr(self, f"_{key}", value)
 
     def register_subsystems(self, registry: "SystemRegistry") -> None:
         """Register subsystems with the given registry.

@@ -44,3 +44,14 @@ categories:
         order: 1
       - id: "processing/image_operations/morphology"
         order: 2
+
+  - key: "图像处理"
+    name: "图像处理"
+    order: 5
+    subcategories:
+      - key: "像素统计"
+        name: "像素统计"
+        order: 1
+        nodes:
+          - id: "processing/statistics/histogram"
+            order: 1

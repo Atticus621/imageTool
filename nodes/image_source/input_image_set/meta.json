@@ -22,6 +22,7 @@
             "multi": false
         }
     ],
+    "optional_ports": [],
     "params": [
         {
             "name": "source",

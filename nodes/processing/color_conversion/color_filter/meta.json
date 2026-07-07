@@ -10,6 +10,11 @@
             "name": "images",
             "type": "image",
             "label": "图像输入"
+        },
+        {
+            "name": "roi",
+            "type": "roi",
+            "label": "ROI 输入"
         }
     ],
     "outputs": [
@@ -24,6 +29,7 @@
             "label": "通道过滤遮罩"
         }
     ],
+    "optional_ports": [],
     "params": [
         {
             "name": "channel_type",

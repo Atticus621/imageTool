@@ -7,6 +7,7 @@ class PortType(Enum):
     NUMBER = "number"
     STRING = "string"
     BOOLEAN = "boolean"
+    ROI = "roi"
     ANY = "any"
 
 
@@ -70,6 +71,24 @@ class Port:
     @property
     def is_connected(self) -> bool:
         return len(self.connections) > 0
+
+    def can_connect(self, other: "Port") -> bool:
+        """Check if this port can connect to another port based on type.
+
+        Rules:
+        - ANY can connect to anything.
+        - Same types can connect.
+        - ROI can only connect to ROI or ANY.
+        - Other types cannot connect to ROI.
+        """
+        if self.port_type == PortType.ANY or other.port_type == PortType.ANY:
+            return True
+        if self.port_type == other.port_type:
+            return True
+        # ROI is exclusive: only connects to ROI or ANY
+        if self.port_type == PortType.ROI or other.port_type == PortType.ROI:
+            return False
+        return True
 
     def connect(self, other: "Port"):
         if other not in self.connections:

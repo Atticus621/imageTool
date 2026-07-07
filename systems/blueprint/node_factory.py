@@ -145,14 +145,9 @@ class NodeFactory:
     def to_pipeline_info(node: "BaseNode") -> PipelineNodeInfo:
         """Convert a GraphNode to a PipelineNodeInfo for execution.
 
-        Pure data transformation — no side effects.
+        Delegates to GraphNode.to_pipeline_info() as single source of truth.
         """
-        return PipelineNodeInfo(
-            node_id=getattr(node, "_node_id", ""),
-            name=node.name(),
-            param_values=dict(getattr(node, "_param_values", {})),
-            port_label_to_name=dict(getattr(node, "_port_label_to_name", {})),
-        )
+        return node.to_pipeline_info()
 
     @staticmethod
     def extract_pipeline(graph: "NodeGraph") -> list[PipelineNodeInfo]:
