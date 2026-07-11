@@ -26,7 +26,15 @@ class NetworkServer:
         logger.info(f"Network server started on {self._host}:{self._port}")
 
     def _run(self):
-        import uvicorn
+        try:
+            import uvicorn
+        except ModuleNotFoundError:
+            logger.error(
+                "uvicorn is not installed; network server cannot start. "
+                "Install uvicorn or disable the API service."
+            )
+            return
+
         uvicorn.run(
             self._app,
             host=self._host,

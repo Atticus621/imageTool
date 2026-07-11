@@ -121,10 +121,11 @@ class INodeGraphProvider(ABC):
         ...
 
     @abstractmethod
-    def get_category_tree(self) -> dict:
+    def get_category_tree(self):
         """Get the node category tree for building UI context menus.
 
-        Returns a nested dict: {category_name: {subcategory_name: [NodeMeta, ...]}}.
+        Returns a dict[str, CategoryNode] where each CategoryNode has
+        .subcategories (dict) and .items (list of NodeMeta).
         """
         ...
 

@@ -1,0 +1,51 @@
+{
+    "id": "detection/shape/rect_detect",
+    "name": "矩形检测",
+    "category": "检测",
+    "subcategory": "",
+    "description": "检测图像中的矩形和四边形",
+    "version": "1.0.0",
+    "inputs": [
+        {"name": "images", "type": "image", "label": "图像输入"}
+    ],
+    "outputs": [
+        {"name": "images", "type": "image", "label": "标注图像"},
+        {"name": "rois", "type": "roi", "label": "检测区域"}
+    ],
+    "optional_ports": [
+        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
+        {"name": "count", "label": "检测数量", "port_type": "number", "direction": "output", "default": false, "group": "output"},
+        {"name": "stats", "label": "统计信息", "port_type": "string", "direction": "output", "default": false, "group": "output"}
+    ],
+    "params": [
+        {
+            "name": "min_area",
+            "type": "int_slider",
+            "label": "最小面积",
+            "default": 500,
+            "min": 10,
+            "max": 10000,
+            "step": 10
+        },
+        {
+            "name": "epsilon_factor",
+            "type": "float_slider",
+            "label": "近似精度",
+            "default": 0.02,
+            "min": 0.001,
+            "max": 0.1,
+            "step": 0.001
+        },
+        {
+            "name": "detect_mode",
+            "type": "combo",
+            "label": "检测模式",
+            "default": "rect",
+            "pinned": true,
+            "options": [
+                {"value": "rect", "label": "最小外接矩形"},
+                {"value": "quad", "label": "四边形近似"}
+            ]
+        }
+    ]
+}

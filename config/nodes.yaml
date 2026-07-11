@@ -8,50 +8,58 @@ categories:
       - id: "image_source/camera"
         order: 2
 
-  - key: "检测"
-    name: "检测"
-    order: 2
-    subcategories:
-      - key: "形状检测"
-        name: "形状检测"
-        order: 1
-        nodes:
-          - id: "detection/shape_detection/circle"
-            order: 1
-          - id: "detection/shape_detection/polygon"
-            order: 2
-      - key: "YOLO"
-        name: "YOLO"
-        order: 2
-        nodes:
-          - id: "detection/yolo/yolo_detect"
-            order: 1
-
-  - key: "颜色处理"
-    name: "颜色处理"
-    order: 3
-    nodes:
-      - id: "processing/color_conversion/convert"
-        order: 1
-      - id: "processing/color_conversion/color_filter"
-        order: 2
-
-  - key: "图像运算"
-    name: "图像运算"
-    order: 4
-    nodes:
-      - id: "processing/image_operations/mask_operations"
-        order: 1
-      - id: "processing/image_operations/morphology"
-        order: 2
-
   - key: "图像处理"
     name: "图像处理"
-    order: 5
+    order: 2
     subcategories:
-      - key: "像素统计"
-        name: "像素统计"
+      - key: "预处理"
+        name: "预处理"
         order: 1
+        nodes:
+          - id: "processing/preprocess/denoise"
+            order: 1
+          - id: "processing/preprocess/binarize"
+            order: 2
+          - id: "processing/preprocess/morphology"
+            order: 3
+          - id: "processing/brightness/brightness"
+            order: 4
+          - id: "processing/transform/resize_crop"
+            order: 5
+      - key: "颜色"
+        name: "颜色"
+        order: 2
+        nodes:
+          - id: "processing/color/color_convert"
+            order: 1
+          - id: "processing/color/color_filter"
+            order: 2
+      - key: "运算"
+        name: "运算"
+        order: 3
+        nodes:
+          - id: "processing/arithmetic/mask_ops"
+            order: 1
+      - key: "统计"
+        name: "统计"
+        order: 4
         nodes:
           - id: "processing/statistics/histogram"
             order: 1
+
+  - key: "检测"
+    name: "检测"
+    order: 3
+    nodes:
+      - id: "detection/contour/contour_detect"
+        order: 1
+      - id: "detection/shape/circle_detect"
+        order: 2
+      - id: "detection/shape/rect_detect"
+        order: 3
+      - id: "detection/edge/edge_detect"
+        order: 4
+      - id: "detection/location/centroid"
+        order: 5
+      - id: "detection/ai/yolo_detect"
+        order: 6

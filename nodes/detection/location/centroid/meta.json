@@ -1,0 +1,43 @@
+{
+    "id": "detection/location/centroid",
+    "name": "质心定位",
+    "category": "检测",
+    "subcategory": "",
+    "description": "通过轮廓矩计算物体质心位置",
+    "version": "1.0.0",
+    "inputs": [
+        {"name": "images", "type": "image", "label": "图像输入"}
+    ],
+    "outputs": [
+        {"name": "images", "type": "image", "label": "标注图像"},
+        {"name": "rois", "type": "roi", "label": "检测区域"}
+    ],
+    "optional_ports": [
+        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
+        {"name": "count", "label": "检测数量", "port_type": "number", "direction": "output", "default": false, "group": "output"},
+        {"name": "stats", "label": "统计信息", "port_type": "string", "direction": "output", "default": false, "group": "output"}
+    ],
+    "params": [
+        {
+            "name": "min_area",
+            "type": "int_slider",
+            "label": "最小面积",
+            "default": 500,
+            "min": 10,
+            "max": 10000,
+            "step": 10
+        },
+        {
+            "name": "draw_cross",
+            "type": "checkbox",
+            "label": "绘制十字标记",
+            "default": true
+        },
+        {
+            "name": "draw_label",
+            "type": "checkbox",
+            "label": "绘制坐标文字",
+            "default": true
+        }
+    ]
+}

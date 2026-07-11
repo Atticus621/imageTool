@@ -24,11 +24,12 @@ class QtExecutionWorker(QObject):
     progress = Signal(int, int)
     node_started = Signal(str)
     node_finished = Signal(str, bool)
+    image_output = Signal(object)
     all_finished = Signal(object)
 
-    def __init__(self, sorted_nodes: list, exec_nodes: dict, node_infos: dict):
+    def __init__(self, sorted_nodes: list, node_infos: dict):
         super().__init__()
-        self._pure = PureWorker(sorted_nodes, exec_nodes, node_infos)
+        self._pure = PureWorker(sorted_nodes, node_infos)
 
     def cancel(self):
         self._pure.cancel()
@@ -38,6 +39,7 @@ class QtExecutionWorker(QObject):
         self._pure.on_progress.connect(lambda c, t: self.progress.emit(c, t))
         self._pure.on_node_started.connect(lambda n: self.node_started.emit(n))
         self._pure.on_node_finished.connect(lambda n, s: self.node_finished.emit(n, s))
+        self._pure.on_image_output.connect(lambda e: self.image_output.emit(e))
         self._pure.on_all_finished.connect(lambda r: self.all_finished.emit(r))
         self._pure.run()
 
@@ -53,6 +55,7 @@ class QtExecutionEngine(QObject):
     execution_finished = Signal(object)
     node_state_changed = Signal(str, str)
     progress_updated = Signal(int, int)
+    image_output = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -93,12 +96,13 @@ class QtExecutionEngine(QObject):
                 logger.warning(f"Cannot create execution node for: {node_id}")
 
         self._thread = QThread()
-        self._worker = QtExecutionWorker(sorted_nodes, exec_nodes, node_infos)
+        self._worker = QtExecutionWorker(sorted_nodes, node_infos)
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.run)
         self._worker.progress.connect(self.progress_updated)
         self._worker.node_finished.connect(self._on_worker_node_finished)
+        self._worker.image_output.connect(self.image_output)
         self._worker.all_finished.connect(self._on_worker_all_finished)
         self._worker.all_finished.connect(self._thread.quit)
 

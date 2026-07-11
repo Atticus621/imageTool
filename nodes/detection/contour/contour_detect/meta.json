@@ -1,0 +1,60 @@
+{
+    "id": "detection/contour/contour_detect",
+    "name": "轮廓检测",
+    "category": "检测",
+    "subcategory": "",
+    "description": "检测图像中的轮廓，支持面积和顶点数过滤",
+    "version": "1.0.0",
+    "inputs": [
+        {"name": "images", "type": "image", "label": "图像输入"}
+    ],
+    "outputs": [
+        {"name": "images", "type": "image", "label": "标注图像"},
+        {"name": "rois", "type": "roi", "label": "检测区域"}
+    ],
+    "optional_ports": [
+        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
+        {"name": "count", "label": "检测数量", "port_type": "number", "direction": "output", "default": false, "group": "output"},
+        {"name": "stats", "label": "统计信息", "port_type": "string", "direction": "output", "default": false, "group": "output"}
+    ],
+    "params": [
+        {
+            "name": "min_area",
+            "type": "int_slider",
+            "label": "最小面积",
+            "default": 500,
+            "min": 10,
+            "max": 10000,
+            "step": 10
+        },
+        {
+            "name": "max_area",
+            "type": "int_slider",
+            "label": "最大面积",
+            "default": 100000,
+            "min": 1000,
+            "max": 1000000,
+            "step": 100
+        },
+        {
+            "name": "epsilon_factor",
+            "type": "float_slider",
+            "label": "近似精度",
+            "default": 0.02,
+            "min": 0.001,
+            "max": 0.1,
+            "step": 0.001
+        },
+        {
+            "name": "retrieval_mode",
+            "type": "combo",
+            "label": "检索模式",
+            "default": "tree",
+            "options": [
+                {"value": "external", "label": "_EXTERNAL (仅外部)"},
+                {"value": "list", "label": "_LIST (所有轮廓)"},
+                {"value": "tree", "label": "_TREE (层级树)"}
+            ]
+        }
+    ]
+}

@@ -1,0 +1,55 @@
+{
+    "id": "detection/edge/edge_detect",
+    "name": "边缘检测",
+    "category": "检测",
+    "subcategory": "",
+    "description": "图像边缘检测：Canny、Sobel、Laplacian",
+    "version": "1.0.0",
+    "inputs": [
+        {"name": "images", "type": "image", "label": "图像输入"}
+    ],
+    "outputs": [
+        {"name": "images", "type": "image", "label": "边缘图像"}
+    ],
+    "params": [
+        {
+            "name": "method",
+            "type": "combo",
+            "label": "检测方法",
+            "default": "canny",
+            "pinned": true,
+            "options": [
+                {"value": "canny", "label": "Canny"},
+                {"value": "sobel", "label": "Sobel"},
+                {"value": "laplacian", "label": "Laplacian"}
+            ]
+        },
+        {
+            "name": "threshold1",
+            "type": "int_slider",
+            "label": "低阈值",
+            "default": 50,
+            "min": 0,
+            "max": 255,
+            "step": 1
+        },
+        {
+            "name": "threshold2",
+            "type": "int_slider",
+            "label": "高阈值",
+            "default": 150,
+            "min": 0,
+            "max": 255,
+            "step": 1
+        },
+        {
+            "name": "ksize",
+            "type": "int_slider",
+            "label": "核大小",
+            "default": 3,
+            "min": 1,
+            "max": 31,
+            "step": 2
+        }
+    ]
+}

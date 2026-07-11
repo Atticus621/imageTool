@@ -17,37 +17,26 @@ from core.node_base.registry import node_registry
 from core.system.auto_register import get_all_registrations, get_sorted_by_dependencies
 from ui.qt_engine import QtExecutionEngine as ExecutionEngine
 from systems.execution.result import ExecutionResult
-from core.interfaces import IImageDisplayProvider, INodeGraphProvider
 from ui.node_graph_widget import NodeGraphWidget, GraphNode
 from ui.node_selector import NodeSelectorWindow
+from ui.project_file_controller import ProjectFileController
 from ui.widgets.info_panel import InfoPanelWidget
 from ui.execution_controller import ExecutionController
 
 
 class MainWindow(QMainWindow):
-    """主窗口 - 支持自动注册和手动注入两种方式"""
+    """Main application window — thin orchestrator.
+
+    Systems must be provided via a SystemRegistry.  Use
+    ``MainWindow.from_registry(registry)`` to create.
+    """
 
     @classmethod
     def from_registry(cls, registry) -> "MainWindow":
-        """从注册表创建 MainWindow（自动模式）
-
-        Args:
-            registry: SystemRegistry 实例
-
-        Returns:
-            MainWindow 实例
-        """
-        # 使用 __init__ 并传递 registry
         window = cls(registry=registry)
         return window
 
-    def __init__(
-        self,
-        image_display: IImageDisplayProvider | None = None,
-        blueprint: INodeGraphProvider | None = None,
-        project=None,
-        registry=None,
-    ):
+    def __init__(self, registry=None):
         super().__init__()
         self._systems = {}
         self._system_registrations = get_all_registrations()
@@ -58,59 +47,25 @@ class MainWindow(QMainWindow):
             config.get("ui.window_height", 900),
         )
 
-        # 如果提供了 registry，使用自动模式
-        if registry is not None:
-            # 从注册表获取所有系统
-            for name in get_sorted_by_dependencies():
-                try:
-                    self._systems[name] = registry.get(name)
-                except KeyError:
-                    logger.warning(f"[MainWindow] System not found in registry: {name}")
+        # Load systems from registry
+        for name in get_sorted_by_dependencies():
+            try:
+                self._systems[name] = registry.get(name)
+            except KeyError:
+                logger.warning(f"[MainWindow] System not found in registry: {name}")
 
-            # 设置快捷访问属性
-            self._image_display = self._systems.get("ImageDisplay")
-            self._blueprint = self._systems.get("Blueprint")
-            self._project = self._systems.get("Project")
+        self._image_display = self._systems.get("ImageDisplay")
+        self._blueprint = self._systems.get("Blueprint")
+        self._project = self._systems.get("Project")
 
-            # 初始化 UI（自动模式）
-            self._init_from_registry()
-        else:
-            # 手动注入模式（向后兼容）
-            if image_display is None:
-                from systems.image_display.system import ImageDisplaySystem
-                self._image_display = ImageDisplaySystem()
-            else:
-                self._image_display = image_display
+        self._init()
 
-            if blueprint is None:
-                from systems.blueprint.system import BlueprintSystem
-                self._blueprint = BlueprintSystem()
-            else:
-                self._blueprint = blueprint
-
-            if project is None:
-                from pathlib import Path
-                from systems.project.system import ProjectSystem
-                root_dir = Path(__file__).parent.parent
-                self._project = ProjectSystem(root_dir)
-            else:
-                self._project = project
-
-            # 注册到 systems 字典
-            self._systems["ImageDisplay"] = self._image_display
-            self._systems["Blueprint"] = self._blueprint
-            self._systems["Project"] = self._project
-
-            # 初始化 UI（标准模式）
-            self._init_standard()
-
-    def _init_from_registry(self):
-        """从注册表初始化（自动模式）"""
+    def _init(self):
+        """Single unified initialization."""
         self._node_graph_widget = None
         self._node_selector = None
         self._engine = ExecutionEngine(self)
 
-        # Execution state machine
         self._exec_ctrl = ExecutionController(
             engine=self._engine,
             graph_getter=lambda: self._node_graph_widget.graph,
@@ -119,57 +74,20 @@ class MainWindow(QMainWindow):
         )
         self._exec_ctrl.state_changed.connect(self._sync_execution_ui)
 
-        self._init_ui()
-        self._auto_build_menu()
-        self._auto_build_toolbar()
-        self._init_statusbar()
-        self._auto_wire_systems()
-        self._connect_signals()
-
-        logger.info("MainWindow initialized (auto mode)")
-
-    def _init_standard(self):
-        """标准初始化（手动模式）"""
-        self._node_graph_widget = None
-        self._node_selector = None
-        self._engine = ExecutionEngine(self)
-
-        # Execution state machine
-        self._exec_ctrl = ExecutionController(
-            engine=self._engine,
-            graph_getter=lambda: self._node_graph_widget.graph,
-            on_before_execute=self._reset_all_node_states,
-            parent=self,
-        )
-        self._exec_ctrl.state_changed.connect(self._sync_execution_ui)
+        # Project file controller — owns all project I/O + save prompts
+        self._project_ctrl = ProjectFileController(self._project, self)
 
         self._init_ui()
-        self._init_menu()
-        self._init_toolbar()
+        self._build_menu()
+        self._build_toolbar()
         self._init_statusbar()
-        self._wire_blueprint_system()
-        self._wire_project_system()
+
+        self._project_ctrl.status_message.connect(self._statusbar.showMessage)
+        self._project_ctrl.title_changed.connect(self.setWindowTitle)
+        self._wire_systems()
         self._connect_signals()
 
-        logger.info("MainWindow initialized (standard mode)")
-
-        # Execution state machine — centralized in ExecutionController
-        self._exec_ctrl = ExecutionController(
-            engine=self._engine,
-            graph_getter=lambda: self._node_graph_widget.graph,
-            on_before_execute=self._reset_all_node_states,
-            parent=self,
-        )
-        self._exec_ctrl.state_changed.connect(self._sync_execution_ui)
-
-        self._init_ui()
-        self._init_menu()
-        self._init_toolbar()
-        self._init_statusbar()
-        self._wire_blueprint_system()
-        self._wire_project_system()
-        self._connect_signals()
-
+        self._project_ctrl.update_window_title()
         logger.info("MainWindow initialized")
 
     def _init_ui(self):
@@ -213,103 +131,10 @@ class MainWindow(QMainWindow):
 
         return container
 
-    def _init_menu(self):
-        menu_bar = self.menuBar()
-
-        # File menu
-        file_menu = menu_bar.addMenu("文件(&F)")
-
-        new_action = QAction("新建项目", self)
-        new_action.setShortcut(QKeySequence.StandardKey.New)
-        new_action.triggered.connect(self._on_new_project)
-        file_menu.addAction(new_action)
-
-        open_action = QAction("打开项目", self)
-        open_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(self._on_open_project)
-        file_menu.addAction(open_action)
-
-        file_menu.addSeparator()
-
-        save_action = QAction("保存", self)
-        save_action.setShortcut(QKeySequence.StandardKey.Save)
-        save_action.triggered.connect(self._on_save_project)
-        file_menu.addAction(save_action)
-
-        save_as_action = QAction("另存为", self)
-        save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
-        save_as_action.triggered.connect(self._on_save_project_as)
-        file_menu.addAction(save_as_action)
-
-        file_menu.addSeparator()
-
-        save_template_action = QAction("保存为模板", self)
-        save_template_action.triggered.connect(self._on_save_as_template)
-        file_menu.addAction(save_template_action)
-
-        file_menu.addSeparator()
-
-        file_menu.addAction("退出", self.close)
-
-        # Run menu
-        run_menu = menu_bar.addMenu("运行(&R)")
-        run_menu.addAction("单次执行", self._exec_ctrl.execute_once)
-        run_menu.addAction("停止执行", self._exec_ctrl.stop)
-        run_menu.addSeparator()
-        self._action_loop = QAction("循环运行", self)
-        self._action_loop.setCheckable(True)
-        self._action_loop.triggered.connect(self._exec_ctrl.toggle_loop)
-        run_menu.addAction(self._action_loop)
-
-        # View menu
-        view_menu = menu_bar.addMenu("视图(&V)")
-        view_menu.addAction("重置缩放", self._on_reset_zoom)
-        view_menu.addAction("适应选中", self._on_fit_selection)
-        view_menu.addSeparator()
-        self._action_ruler = QAction("尺子工具", self)
-        self._action_ruler.setCheckable(True)
-        self._action_ruler.triggered.connect(self._on_toggle_ruler)
-        view_menu.addAction(self._action_ruler)
-
-        # Help menu
-        help_menu = menu_bar.addMenu("帮助(&H)")
-        help_menu.addAction("关于", self._on_about)
-
     def _init_statusbar(self):
         self._statusbar = QStatusBar()
         self.setStatusBar(self._statusbar)
         self._statusbar.showMessage("就绪")
-
-    def _init_toolbar(self):
-        toolbar = self.addToolBar("执行")
-        toolbar.setMovable(False)
-
-        self._btn_single = QAction("▶ 单次", self)
-        self._btn_single.triggered.connect(self._exec_ctrl.execute_once)
-        toolbar.addAction(self._btn_single)
-
-        self._btn_loop = QAction("🔁 循环", self)
-        self._btn_loop.triggered.connect(self._exec_ctrl.toggle_loop)
-        toolbar.addAction(self._btn_loop)
-
-        toolbar.addSeparator()
-
-        self._btn_save = QAction("💾 保存", self)
-        self._btn_save.triggered.connect(self._on_save_project)
-        toolbar.addAction(self._btn_save)
-
-        toolbar.addSeparator()
-
-        self._btn_clear = QAction("✕ 清空", self)
-        self._btn_clear.triggered.connect(self._on_new_project)
-        toolbar.addAction(self._btn_clear)
-
-        toolbar.addSeparator()
-
-        self._btn_ruler = QAction("📏 尺子", self)
-        self._btn_ruler.setCheckable(True)
-        self._btn_ruler.triggered.connect(self._on_toggle_ruler)
-        toolbar.addAction(self._btn_ruler)
 
     def _connect_signals(self):
         graph = self._node_graph_widget.graph
@@ -324,46 +149,22 @@ class MainWindow(QMainWindow):
         self._engine.execution_finished.connect(self._on_engine_finished)
         self._engine.node_state_changed.connect(self._on_node_state_changed)
         self._engine.progress_updated.connect(self._on_progress_updated)
+        self._engine.image_output.connect(self._on_image_output)
         self._image_viewer.ruler_measurement.connect(self._on_ruler_measurement)
         self._image_viewer.pixel_hovered.connect(self._info_panel.update_info)
 
         # Project system signals
         self._project.on_project_modified.connect(self._on_project_modified)
 
-    def _wire_blueprint_system(self):
-        """Wire BlueprintSystem to the graph and execution callbacks.
-
-        Bridge commands (from REST API) are now handled by BlueprintSystem,
-        not by MainWindow directly.
-        """
-        self._blueprint.wire(
-            graph_getter=lambda: self._node_graph_widget.graph,
-            on_execute=self._exec_ctrl.execute,
-            on_stop=self._exec_ctrl.stop,
-            on_clear=self._on_new_project,
-            on_loop_on=self._exec_ctrl.enable_loop,
-            on_loop_off=self._exec_ctrl.disable_loop,
-        )
-
-    def _wire_project_system(self):
-        """Wire ProjectSystem to the graph.
-
-        Called after UI is created to enable project save/load operations.
-        """
-        self._project.wire(
-            graph_getter=lambda: self._node_graph_widget.graph,
-        )
-        logger.info("ProjectSystem wired")
-
     # ------------------------------------------------------------------
-    # Auto-wiring and auto-building (for from_registry mode)
+    # System wiring
     # ------------------------------------------------------------------
 
-    def _auto_wire_systems(self):
-        """自动绑定所有系统"""
+    def _wire_systems(self):
+        """Wire all systems to the graph and execution callbacks."""
         graph_getter = lambda: self._node_graph_widget.graph
 
-        # BlueprintSystem 需要特殊的 wire 参数
+        # BlueprintSystem needs extra execution callbacks
         if "Blueprint" in self._systems:
             try:
                 self._systems["Blueprint"].wire(
@@ -374,24 +175,23 @@ class MainWindow(QMainWindow):
                     on_loop_on=self._exec_ctrl.enable_loop,
                     on_loop_off=self._exec_ctrl.disable_loop,
                 )
-                logger.info("[MainWindow] Auto-wired system: Blueprint")
+                logger.info("[MainWindow] Wired system: Blueprint")
             except Exception as e:
                 logger.error(f"[MainWindow] Failed to wire Blueprint: {e}")
 
-        # 其他系统使用通用 wire
+        # Other systems use generic wire
         for name, system in self._systems.items():
             if name == "Blueprint":
-                continue  # 已经处理过
-
+                continue
             reg = self._system_registrations.get(name)
             if reg and reg.auto_wire and hasattr(system, 'wire'):
                 try:
                     system.wire(graph_getter=graph_getter)
-                    logger.info(f"[MainWindow] Auto-wired system: {name}")
+                    logger.info(f"[MainWindow] Wired system: {name}")
                 except Exception as e:
                     logger.error(f"[MainWindow] Failed to wire {name}: {e}")
 
-    def _auto_build_menu(self):
+    def _build_menu(self):
         """从系统注册自动构建菜单"""
         menu_bar = self.menuBar()
 
@@ -463,7 +263,7 @@ class MainWindow(QMainWindow):
         help_menu = menu_bar.addMenu("帮助(&H)")
         help_menu.addAction("关于", self._on_about)
 
-    def _auto_build_toolbar(self):
+    def _build_toolbar(self):
         """从系统注册自动构建工具栏"""
         toolbar = self.addToolBar("执行")
         toolbar.setMovable(False)
@@ -530,7 +330,7 @@ class MainWindow(QMainWindow):
 
     @Slot(object, str)
     def _on_node_created_with_meta(self, node, node_id: str):
-        self._attach_embedded_widget(node, node_id)
+        # Widget is now created automatically by set_node_meta()
         logger.info(f"Node created with meta: {node.name()} ({node_id}), opening editor")
         self._open_node_editor(node, node_id)
 
@@ -562,6 +362,38 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_node_double_clicked(self, node):
+        from NodeGraphQt import GroupNode
+        from NodeGraphQt.nodes.port_node import PortInputNode, PortOutputNode
+        from ui.adapters.node_graph_workarounds import (
+            rebuild_group_node_ports,
+            expand_group_node_with_retry,
+            connect_sub_graph_signals,
+        )
+
+        # Port nodes: double-click to rename the port node
+        if isinstance(node, (PortInputNode, PortOutputNode)):
+            self._node_graph_widget.rename_node_inline(node)
+            return
+
+        if isinstance(node, GroupNode):
+            logger.info(f"Expand group node: {node.name()}")
+            # Workaround 2: library deserialization doesn't recreate Port objects
+            rebuild_group_node_ports(node)
+
+            parent_graph = node.graph
+            if parent_graph:
+                # Workaround 3: stale session causes KeyError on expand
+                sub_graph = expand_group_node_with_retry(parent_graph, node)
+                if sub_graph:
+                    connect_sub_graph_signals(
+                        sub_graph,
+                        self._on_sub_graph_property_changed,
+                        self._on_node_double_clicked,
+                    )
+                    # Add SubGraph-only context menu items (add input/output port)
+                    self._node_graph_widget.setup_sub_graph_menu(sub_graph)
+            return
+
         node_id = getattr(node, "_node_id", "")
         if node_id:
             logger.info(f"Edit node: {node.name()} ({node_id})")
@@ -569,6 +401,15 @@ class MainWindow(QMainWindow):
         else:
             logger.info(f"Select type for node: {node.name()}")
             self._open_node_selector(node)
+
+    def _on_sub_graph_property_changed(self, node, prop_name, value):
+        """Sync port name when PortInputNode/PortOutputNode is renamed in SubGraph."""
+        from ui.adapters.node_graph_workarounds import (
+            is_port_rename_event,
+            sync_port_name_to_group,
+        )
+        if is_port_rename_event(node, prop_name):
+            sync_port_name_to_group(node.parent_port, value)
 
     @Slot(object)
     def _on_replace_requested(self, node):
@@ -591,6 +432,7 @@ class MainWindow(QMainWindow):
                 param_values = self._node_selector.get_param_values()
                 target._param_values.update(param_values)
                 target.sync_port_visibility()
+                target.sync_embedded_widget()
                 logger.info(f"Updated node params: {target.name()} -> {param_values}")
         else:
             self._node_graph_widget.create_node_by_id(node_id)
@@ -606,6 +448,8 @@ class MainWindow(QMainWindow):
             node_id,
             param_values=node._param_values if hasattr(node, '_param_values') else None,
         )
+        # Sync pinned widget with current param values
+        node.sync_embedded_widget()
         self._node_selector.show()
         self._node_selector.raise_()
         self._node_selector.activateWindow()
@@ -635,26 +479,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_new_project(self):
-        """Create a new project, prompting to save if modified."""
-        if self._project.is_modified:
-            reply = QMessageBox.question(
-                self,
-                "保存项目",
-                "当前项目已修改，是否保存？",
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-            )
-            if reply == QMessageBox.StandardButton.Save:
-                if not self._on_save_project():
-                    return  # Save failed, don't create new
-            elif reply == QMessageBox.StandardButton.Cancel:
-                return
-
-        self._project.new_project()
-        self._statusbar.showMessage("新项目已创建")
-        self.setWindowTitle("ImageTools")
-        logger.info("New project created")
+        self._project_ctrl.new_project()
 
     def _sync_execution_ui(self):
         """Single sync point for toolbar/menu — called on every state change."""
@@ -668,28 +493,9 @@ class MainWindow(QMainWindow):
         logger.info("Engine started")
 
     # ------------------------------------------------------------------
-    # Embedded widget support
+    # Embedded widget support — factory functions at module level
+    # so @EmbeddedWidgetRegistry.register decorators work.
     # ------------------------------------------------------------------
-
-    _EMBEDDED_WIDGET_MAP = {
-        "processing/statistics/histogram": "_create_histogram_embedded",
-    }
-
-    def _attach_embedded_widget(self, node, node_id: str):
-        factory = self._EMBEDDED_WIDGET_MAP.get(node_id)
-        if not factory:
-            return
-        method = getattr(self, factory, None)
-        if method:
-            logger.info(f"[EmbeddedWidget] Attaching {factory} for {node_id}")
-            method(node)
-
-    def _create_histogram_embedded(self, node):
-        from ui.widgets.node_histogram_widget import NodeHistogramWidget
-        widget = NodeHistogramWidget(parent=node.view)
-        node.add_embedded_widget(widget)
-        logger.info(f"[EmbeddedWidget] Histogram widget added to {node.name()}, "
-                     f"node_size={node.view._width:.0f}x{node.view._height:.0f}")
 
     def _update_embedded_widgets(self):
         from nodes.processing.statistics.histogram.node import HistogramNode
@@ -731,6 +537,11 @@ class MainWindow(QMainWindow):
 
     def _on_progress_updated(self, current: int, total: int):
         self._statusbar.showMessage(f"执行中... {current}/{total}")
+
+    def _on_image_output(self, entries):
+        from systems.execution.result import ExecutionResult
+        result = ExecutionResult(success=True, output_sets=entries)
+        self._image_viewer.set_execution_results(result)
 
     def _reset_all_node_states(self):
         graph = self._node_graph_widget.graph
@@ -775,187 +586,52 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_open_project(self):
-        """Open an existing project file."""
-        if self._project.is_modified:
-            reply = QMessageBox.question(
-                self,
-                "保存项目",
-                "当前项目已修改，是否保存？",
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-            )
-            if reply == QMessageBox.StandardButton.Save:
-                if not self._on_save_project():
-                    return
-            elif reply == QMessageBox.StandardButton.Cancel:
-                return
-
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "打开项目文件",
-            "",
-            "ImageTools 项目 (*.itproj);;所有文件 (*)",
-        )
-
-        if not path:
-            return
-
-        project_path = Path(path)
-
-        # Check for auto-save
-        if self._project.check_autosave(project_path):
-            from ui.dialogs import AutoSaveRecoveryDialog
-            dialog = AutoSaveRecoveryDialog(
-                project_path,
-                project_path.with_suffix(project_path.suffix + "~"),
-                self,
-            )
-            dialog.exec()
-
-            if dialog.should_recover:
-                if self._project.recover_autosave(project_path):
-                    self._statusbar.showMessage("已恢复自动保存的项目")
-                    self._update_window_title()
-                    return
-
-        # Normal load
-        if self._project.load_project(project_path):
-            self._statusbar.showMessage(f"已加载: {project_path.name}")
-            self._update_window_title()
-        else:
-            QMessageBox.warning(
-                self,
-                "加载失败",
-                f"无法加载项目文件:\n{project_path}",
-            )
+        self._project_ctrl.open_project()
 
     def _on_save_project(self) -> bool:
-        """Save the current project. Returns True if saved."""
-        if self._project.current_path:
-            # Save to existing path
-            if self._project.save_project():
-                self._statusbar.showMessage("项目已保存")
-                self._update_window_title()
-                return True
-            else:
-                QMessageBox.warning(self, "保存失败", "无法保存项目文件")
-                return False
-        else:
-            # No path yet, do Save As
-            return self._on_save_project_as()
+        return self._project_ctrl.save_project()
 
     def _on_save_project_as(self) -> bool:
-        """Save the current project to a new file. Returns True if saved."""
-        from ui.dialogs import SaveDialog
-
-        # Ensure project exists (auto-create if needed, without clearing graph)
-        if self._project.current_project is None:
-            self._project.new_project(clear_graph=False)
-
-        dialog = SaveDialog(
-            self,
-            project_name=self._project.current_project.metadata.name
-            if self._project.current_project
-            else "",
-        )
-
-        if dialog.exec() != SaveDialog.DialogCode.Accepted:
-            return False
-
-        # Update metadata
-        if self._project.current_project:
-            self._project.current_project.metadata.name = dialog.project_name
-            self._project.current_project.metadata.description = dialog.description
-            self._project.current_project.metadata.author = dialog.author
-            self._project.current_project.metadata.tags = dialog.tags
-
-        # Get save path
-        default_name = dialog.project_name or "未命名项目"
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "保存项目文件",
-            f"{default_name}.itproj",
-            "ImageTools 项目 (*.itproj);;所有文件 (*)",
-        )
-
-        if not path:
-            return False
-
-        # Ensure .itproj extension
-        save_path = Path(path)
-        if save_path.suffix != ".itproj":
-            save_path = save_path.with_suffix(".itproj")
-
-        if self._project.save_project(save_path):
-            self._statusbar.showMessage(f"项目已保存: {save_path.name}")
-            self._update_window_title()
-            return True
-        else:
-            QMessageBox.warning(self, "保存失败", "无法保存项目文件")
-            return False
+        return self._project_ctrl.save_project_as()
 
     def _on_save_as_template(self):
-        """Save current project as a template."""
-        if not self._project.has_project:
-            QMessageBox.information(self, "提示", "没有打开的项目")
-            return
-
-        from ui.dialogs import SaveDialog
-
-        dialog = SaveDialog(self)
-        dialog.setWindowTitle("保存为模板")
-
-        if dialog.exec() != SaveDialog.DialogCode.Accepted:
-            return
-
-        if not dialog.project_name:
-            QMessageBox.warning(self, "错误", "请输入模板名称")
-            return
-
-        template = self._project.save_as_template(
-            dialog.project_name,
-            dialog.description,
-        )
-
-        if template:
-            QMessageBox.information(
-                self,
-                "模板已保存",
-                f"模板 '{dialog.project_name}' 已保存",
-            )
-        else:
-            QMessageBox.warning(self, "保存失败", "无法保存模板")
+        self._project_ctrl.save_as_template()
 
     def _update_window_title(self):
-        """Update window title with project name."""
-        base_title = "ImageTools"
-        if self._project.has_project:
-            name = self._project.current_project.metadata.name
-            self.setWindowTitle(f"{name} - {base_title}")
-        else:
-            self.setWindowTitle(base_title)
+        self._project_ctrl.update_window_title()
 
     def closeEvent(self, event):
-        """Handle window close event."""
-        if self._project.is_modified:
-            reply = QMessageBox.question(
-                self,
-                "保存项目",
-                "项目已修改，是否保存？",
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-            )
-            if reply == QMessageBox.StandardButton.Save:
-                if not self._on_save_project():
-                    event.ignore()
-                    return
-            elif reply == QMessageBox.StandardButton.Cancel:
-                event.ignore()
-                return
+        self._project_ctrl.handle_close(event)
 
-        # Stop auto-save
-        self._project.disable_autosave()
 
-        event.accept()
+# ------------------------------------------------------------------
+# Embedded widget factories — registered via decorator.
+# Defined at module level so the decorators run at import time.
+# ------------------------------------------------------------------
+
+from ui.embedded_widget_registry import EmbeddedWidgetRegistry
+
+
+@EmbeddedWidgetRegistry.register("processing/statistics/histogram")
+def _create_histogram_embedded(node):
+    from ui.widgets.node_histogram_widget import NodeHistogramWidget
+    widget = EmbeddedWidgetRegistry.create_widget(node, NodeHistogramWidget)
+    node.add_embedded_widget(widget)
+
+
+@EmbeddedWidgetRegistry.register("processing/color/color_convert")
+def _create_color_conversion_embedded(node):
+    from ui.widgets.color_conversion_widget import ColorConversionWidget
+    widget = EmbeddedWidgetRegistry.create_widget(node, ColorConversionWidget)
+    node.add_embedded_widget(widget)
+    # Connect widget signal to update node param
+    widget.colorSpaceChanged.connect(
+        lambda value, n=node: _on_color_space_changed(n, value))
+    # Initialize widget with current param value
+    current_value = node._param_values.get("target_type", "bgr")
+    widget.set_value(current_value)
+
+
+def _on_color_space_changed(node, value: str):
+    """Update node's target_type parameter when widget changes."""
+    node._param_values["target_type"] = value

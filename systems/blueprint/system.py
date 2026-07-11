@@ -132,7 +132,7 @@ class BlueprintSystem(ISystem, INodeGraphProvider):
             return []
         return NodeFactory.extract_pipeline(self._graph_getter())
 
-    def get_category_tree(self) -> dict:
+    def get_category_tree(self):
         """Get the category tree for context menu building."""
         return node_registry.get_category_tree()
 

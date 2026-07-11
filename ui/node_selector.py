@@ -1,17 +1,24 @@
+"""Node selector dialog — browse registry and configure parameters."""
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QPushButton, QScrollArea, QWidget, QGridLayout, QGroupBox,
-    QFileDialog, QMessageBox, QFrame, QCheckBox,
+    QMessageBox, QFrame,
 )
 
 from core.logger import logger
 from core.node_base.registry import node_registry
-from core.node_base.node import ParamType
-from ui.param_widgets import create_param_widget, FileListParamWidget
+from ui.widgets.node_param_panel import NodeParamPanel
 
 
 class NodeSelectorWindow(QDialog):
+    """Dialog for browsing registered node types and editing parameters.
+
+    Three cascading combo boxes (category → subcategory → node) plus
+    a NodeParamPanel that renders editable parameter groups.
+    """
+
     node_type_selected = Signal(str)
 
     def __init__(self, parent=None):
@@ -21,24 +28,24 @@ class NodeSelectorWindow(QDialog):
         self._target_node = None
         self._replace_mode = False
         self._edit_mode = False
-        self._param_widgets: dict[str, tuple] = {}  # {name: (ParamDefinition, ParamWidget)}
-        self._optional_port_checkboxes: dict[str, QCheckBox] = {}  # {opc_name: QCheckBox}
         self._current_meta = None
+
+        # Parameter panel (extracted widget)
+        self._param_panel = NodeParamPanel(dialog_parent=self)
         self._init_ui()
         self._populate_category()
         logger.info("NodeSelectorWindow initialized")
 
+    # ── public mode setters ─────────────────────────────────────────────
+
     def set_target_node(self, node):
         self._target_node = node
+        self._param_panel.set_target_node(node)
 
     def set_replace_mode(self, enabled: bool):
         self._replace_mode = enabled
-        if enabled:
-            self.setWindowTitle("替换节点")
-            self._btn_ok.setText("替换")
-        else:
-            self.setWindowTitle("节点选择")
-            self._btn_ok.setText("确定")
+        self._btn_ok.setText("替换" if enabled else "确定")
+        self.setWindowTitle("替换节点" if enabled else "节点选择")
 
     def set_edit_mode(self, enabled: bool):
         self._edit_mode = enabled
@@ -55,43 +62,21 @@ class NodeSelectorWindow(QDialog):
         self._combo_subcategory.blockSignals(True)
         self._combo_node.blockSignals(True)
 
-        cat = meta.category
-        idx = self._combo_category.findData(cat)
+        # Category
+        idx = self._combo_category.findData(meta.category)
         if idx >= 0:
             self._combo_category.setCurrentIndex(idx)
 
-        self._combo_subcategory.clear()
+        # Subcategory
         tree = node_registry.get_category_tree()
-        subs = tree.get(cat, {})
-        sub_keys = [k for k in subs.keys() if k != "_items"]
+        cat_node = tree.get(meta.category)
+        if cat_node:
+            self._rebuild_subcategory_combo(cat_node, meta.subcategory)
 
-        has_direct = "_items" in subs and subs["_items"]
-        if not sub_keys and has_direct:
-            self._combo_subcategory.addItem("--", "__direct__")
-        else:
-            self._combo_subcategory.addItem("-- 请选择 --", "")
-            for sub in sorted(sub_keys):
-                self._combo_subcategory.addItem(sub, sub)
-
-        if meta.subcategory:
-            idx = self._combo_subcategory.findData(meta.subcategory)
-            if idx >= 0:
-                self._combo_subcategory.setCurrentIndex(idx)
-        elif has_direct and not sub_keys:
-            self._combo_subcategory.setCurrentIndex(0)
-
-        self._combo_node.clear()
-        sub = self._combo_subcategory.currentData()
-        if sub == "__direct__":
-            items = subs.get("_items", [])
-        elif sub:
-            items = subs.get(sub, [])
-        else:
-            items = []
-
-        self._combo_node.addItem("-- 请选择 --", "")
-        for item_meta in items:
-            self._combo_node.addItem(item_meta.name, item_meta.id)
+            # Node items
+            sub_key = self._combo_subcategory.currentData()
+            items = self._get_items_for_subkey(cat_node, sub_key)
+            self._rebuild_node_combo(items)
 
         idx = self._combo_node.findData(node_id)
         if idx >= 0:
@@ -101,18 +86,19 @@ class NodeSelectorWindow(QDialog):
         self._combo_subcategory.blockSignals(False)
         self._combo_node.blockSignals(False)
 
-        self._show_params(meta)
-
+        self._param_panel.show_params(meta)
         if param_values:
-            self._set_param_values(param_values)
-
+            self._param_panel.set_param_values(param_values)
         self._btn_ok.setEnabled(True)
         self._current_meta = meta
+
+    # ── UI construction ─────────────────────────────────────────────────
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
+        # Node type browser
         dropdown_group = QGroupBox("节点类型")
         dropdown_layout = QGridLayout(dropdown_group)
 
@@ -133,24 +119,15 @@ class NodeSelectorWindow(QDialog):
 
         layout.addWidget(dropdown_group)
 
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(separator)
+        layout.addWidget(_h_separator())
 
+        # Parameter area (scrollable)
         self._param_area = QScrollArea()
         self._param_area.setWidgetResizable(True)
-        self._param_widget = QWidget()
-        self._param_layout = QVBoxLayout(self._param_widget)
-        self._param_area.setWidget(self._param_widget)
+        self._param_area.setWidget(self._param_panel)
         layout.addWidget(self._param_area, 1)
 
-        self._info_label = QLabel("请选择节点类型")
-        self._info_label.setWordWrap(True)
-        self._info_label.setStyleSheet("color: gray; padding: 20px;")
-        self._param_layout.addWidget(self._info_label)
-        self._param_layout.addStretch()
-
+        # Action buttons
         btn_layout = QHBoxLayout()
         self._btn_ok = QPushButton("确定")
         self._btn_cancel = QPushButton("取消")
@@ -162,345 +139,165 @@ class NodeSelectorWindow(QDialog):
         btn_layout.addWidget(self._btn_cancel)
         layout.addLayout(btn_layout)
 
+    # ── combo-box logic ─────────────────────────────────────────────────
+
+    def _reset_to_safe_state(self):
+        """Reset UI to a safe state after an error."""
+        self._combo_subcategory.blockSignals(True)
+        self._combo_subcategory.clear()
+        self._combo_subcategory.blockSignals(False)
+        self._combo_node.blockSignals(True)
+        self._combo_node.clear()
+        self._combo_node.blockSignals(False)
+        self._btn_ok.setEnabled(False)
+        self._param_panel.show_params(None)
+
     def _populate_category(self):
+        tree = node_registry.get_category_tree()
         self._combo_category.blockSignals(True)
         self._combo_category.clear()
         self._combo_category.addItem("-- 请选择 --", "")
-
-        tree = node_registry.get_category_tree()
         for cat in sorted(tree.keys()):
             self._combo_category.addItem(cat, cat)
-
         self._combo_category.blockSignals(False)
         self._combo_subcategory.clear()
         self._combo_node.clear()
 
     def _on_category_changed(self, index):
+        try:
+            cat = self._combo_category.currentData()
+            self._combo_node.clear()
+            self._btn_ok.setEnabled(False)
+
+            if not cat:
+                self._combo_subcategory.clear()
+                return
+
+            tree = node_registry.get_category_tree()
+            cat_node = tree.get(cat)
+            if cat_node is None:
+                self._combo_subcategory.clear()
+                return
+            self._rebuild_subcategory_combo(cat_node)
+            self._on_subcategory_changed(0)
+        except Exception as e:
+            logger.error(f"Error in category change: {e}")
+            self._reset_to_safe_state()
+
+    def _on_subcategory_changed(self, index):
+        try:
+            cat = self._combo_category.currentData()
+            self._btn_ok.setEnabled(False)
+            if not cat:
+                return
+
+            tree = node_registry.get_category_tree()
+            cat_node = tree.get(cat)
+            if cat_node is None:
+                return
+
+            sub_key = self._combo_subcategory.currentData()
+            items = self._get_items_for_subkey(cat_node, sub_key)
+            self._rebuild_node_combo(items)
+        except Exception as e:
+            logger.error(f"Error in subcategory change: {e}")
+            self._reset_to_safe_state()
+
+    def _on_node_changed(self, index):
+        try:
+            node_id = self._combo_node.currentData()
+            if not node_id:
+                self._btn_ok.setEnabled(False)
+                self._param_panel.show_params(None)
+                return
+
+            meta = node_registry.get_meta(node_id)
+            if meta:
+                self._param_panel.show_params(meta)
+                self._btn_ok.setEnabled(True)
+                self._current_meta = meta
+        except Exception as e:
+            logger.error(f"Error in node change: {e}")
+            self._reset_to_safe_state()
+
+    # ── shared combo rebuild helpers (eliminates preselect duplication) ─
+
+    @staticmethod
+    def _get_items_for_subkey(cat_node, sub_key: str) -> list:
+        """Get NodeMeta items for a given subcategory key.
+
+        Args:
+            cat_node: CategoryNode from the tree.
+            sub_key: Subcategory name, "__direct__" for direct items, or "" for none.
+
+        Returns:
+            List of NodeMeta objects.
+        """
+        from core.node_base.registry import CategoryNode
+        if not isinstance(cat_node, CategoryNode):
+            return []
+        if sub_key == "__direct__":
+            return cat_node.items
+        elif sub_key:
+            sub_node = cat_node.subcategories.get(sub_key)
+            return sub_node.items if sub_node else []
+        return []
+
+    def _rebuild_subcategory_combo(self, cat_node, preselect: str = None):
+        """Rebuild subcategory combo from a CategoryNode.
+
+        Args:
+            cat_node: CategoryNode with subcategories and/or items.
+            preselect: Optional subcategory name to pre-select.
+        """
         self._combo_subcategory.blockSignals(True)
         self._combo_subcategory.clear()
-        self._combo_node.clear()
-        self._btn_ok.setEnabled(False)
 
-        cat = self._combo_category.currentData()
-        if not cat:
-            self._combo_subcategory.blockSignals(False)
-            return
-
-        tree = node_registry.get_category_tree()
-        subs = tree.get(cat, {})
-
-        has_direct_items = "_items" in subs and subs["_items"]
-        sub_keys = [k for k in subs.keys() if k != "_items"]
-
-        if not sub_keys and has_direct_items:
+        # No subcategories — show "--" and load direct items
+        if not cat_node.has_subcategories():
             self._combo_subcategory.addItem("--", "__direct__")
             self._combo_subcategory.blockSignals(False)
-            self._on_subcategory_changed(0)
             return
 
         self._combo_subcategory.addItem("-- 请选择 --", "")
-        for sub in sorted(sub_keys):
-            self._combo_subcategory.addItem(sub, sub)
+        for sub_name in sorted(cat_node.subcategories.keys()):
+            self._combo_subcategory.addItem(sub_name, sub_name)
 
         self._combo_subcategory.blockSignals(False)
 
-    def _on_subcategory_changed(self, index):
+        if preselect:
+            idx = self._combo_subcategory.findData(preselect)
+            if idx >= 0:
+                self._combo_subcategory.setCurrentIndex(idx)
+
+    def _rebuild_node_combo(self, items: list):
+        """Rebuild node combo from a list of NodeMeta objects.
+
+        Args:
+            items: List of NodeMeta to display.
+        """
         self._combo_node.blockSignals(True)
         self._combo_node.clear()
-        self._btn_ok.setEnabled(False)
-
-        cat = self._combo_category.currentData()
-        sub = self._combo_subcategory.currentData()
-        if not cat:
-            self._combo_node.blockSignals(False)
-            return
-
-        tree = node_registry.get_category_tree()
-        subs = tree.get(cat, {})
-
-        if sub == "__direct__":
-            items = subs.get("_items", [])
-        elif sub:
-            items = subs.get(sub, [])
-        else:
-            self._combo_node.blockSignals(False)
-            return
 
         self._combo_node.addItem("-- 请选择 --", "")
-        for meta in items:
-            self._combo_node.addItem(meta.name, meta.id)
+        for item_meta in items:
+            self._combo_node.addItem(item_meta.name, item_meta.id)
 
         self._combo_node.blockSignals(False)
 
-    def _on_node_changed(self, index):
-        node_id = self._combo_node.currentData()
-        if not node_id:
-            self._btn_ok.setEnabled(False)
-            self._clear_params()
-            self._info_label = QLabel("请选择节点类型")
-            self._info_label.setWordWrap(True)
-            self._info_label.setStyleSheet("color: gray; padding: 20px;")
-            self._param_layout.addWidget(self._info_label)
-            return
-
-        meta = node_registry.get_meta(node_id)
-        if meta:
-            self._show_params(meta)
-            self._btn_ok.setEnabled(True)
-            self._current_meta = meta
-
-    def _clear_params(self):
-        while self._param_layout.count():
-            child = self._param_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-        self._param_widgets.clear()
-        self._optional_port_checkboxes.clear()
-
-    # ── Parameter rendering ──────────────────────────────────────────
-
-    def _show_params(self, meta):
-        self._clear_params()
-
-        info_label = QLabel(f"<b>{meta.name}</b><br>{meta.description}")
-        info_label.setWordWrap(True)
-        self._param_layout.addWidget(info_label)
-
-        # ── 输入参数门（可折叠） ──
-        input_opcs = [p for p in meta.optional_ports if p.direction == "input"]
-        input_group = self._create_collapsible_group("输入参数")
-        input_layout = QVBoxLayout(input_group)
-        if input_opcs:
-            for opc in input_opcs:
-                self._add_optional_port_checkbox(opc, input_layout)
-        else:
-            lbl = QLabel("无可配置输入端口")
-            lbl.setStyleSheet("color: gray;")
-            input_layout.addWidget(lbl)
-        input_group.toggled.connect(lambda checked, g=input_group: self._toggle_group_content(g, checked))
-        self._param_layout.addWidget(input_group)
-        self._finalize_collapsible_group(input_group)
-
-        # ── 输出参数门（可折叠） ──
-        output_opcs = [p for p in meta.optional_ports if p.direction == "output"]
-        output_group = self._create_collapsible_group("输出参数")
-        output_layout = QVBoxLayout(output_group)
-        if output_opcs:
-            for opc in output_opcs:
-                self._add_optional_port_checkbox(opc, output_layout)
-        else:
-            lbl = QLabel("无可配置输出端口")
-            lbl.setStyleSheet("color: gray;")
-            output_layout.addWidget(lbl)
-        output_group.toggled.connect(lambda checked, g=output_group: self._toggle_group_content(g, checked))
-        self._param_layout.addWidget(output_group)
-        self._finalize_collapsible_group(output_group)
-
-        # ── 函数参数 ──
-        if meta.params:
-            group = QGroupBox("函数参数")
-            group_layout = QGridLayout(group)
-            row = 0
-
-            for param in meta.params:
-                if param.depends_on:
-                    continue
-                row = self._add_param_row(param, group_layout, row)
-
-            for param in meta.params:
-                if param.depends_on:
-                    row = self._add_param_row(param, group_layout, row)
-
-            self._param_layout.addWidget(group)
-
-            # Generic dependency wiring
-            self._wire_dependencies(meta)
-
-        # ── 高级参数门（可折叠，暂时为空） ──
-        advanced_group = self._create_collapsible_group("高级参数")
-        advanced_layout = QVBoxLayout(advanced_group)
-        lbl = QLabel("暂无高级参数")
-        lbl.setStyleSheet("color: gray;")
-        advanced_layout.addWidget(lbl)
-        advanced_group.toggled.connect(lambda checked, g=advanced_group: self._toggle_group_content(g, checked))
-        self._param_layout.addWidget(advanced_group)
-        self._finalize_collapsible_group(advanced_group)
-
-        self._param_layout.addStretch()
-
-    def _create_collapsible_group(self, title: str) -> QGroupBox:
-        """创建可折叠的 QGroupBox（默认折叠）。"""
-        group = QGroupBox(title)
-        group.setCheckable(True)
-        group.setChecked(False)
-        return group
-
-    def _finalize_collapsible_group(self, group: QGroupBox):
-        """初始化折叠状态：setChecked(False) 时隐藏内容。"""
-        checked = group.isChecked()
-        layout = group.layout()
-        if layout:
-            for i in range(layout.count()):
-                item = layout.itemAt(i)
-                if item and item.widget():
-                    item.widget().setVisible(checked)
-
-    def _toggle_group_content(self, group: QGroupBox, checked: bool):
-        """折叠/展开分组内容。"""
-        layout = group.layout()
-        if layout:
-            for i in range(layout.count()):
-                item = layout.itemAt(i)
-                if item and item.widget():
-                    item.widget().setVisible(checked)
-
-    def _add_optional_port_checkbox(self, opc, layout: QVBoxLayout):
-        """添加可选端口复选框（仅记录状态，不实时生效）。
-
-        优先从节点当前状态读取值，否则用 meta 默认值。
-        """
-        # 从节点 _param_values 读取当前状态
-        current = opc.default
-        if self._target_node and hasattr(self._target_node, '_param_values'):
-            current = self._target_node._param_values.get(f"_opt_{opc.name}", opc.default)
-            logger.debug(f"[OptionalPort] Checkbox '{opc.name}': reading _opt_{opc.name}={current}, param_values={self._target_node._param_values}")
-
-        checkbox = QCheckBox(opc.label or opc.name)
-        checkbox.setChecked(current)
-        checkbox.setToolTip(f"控制是否启用 {opc.label} 端口（点确定后生效）")
-        layout.addWidget(checkbox)
-        self._optional_port_checkboxes[opc.name] = checkbox
-
-    def _apply_optional_port_changes(self):
-        """将所有可选端口的勾选状态应用到节点（点确定时调用）。"""
-        if not self._target_node or not hasattr(self._target_node, 'set_optional_port_visible'):
-            logger.debug(f"[OptionalPort] Skip: target_node={self._target_node}, has_method={hasattr(self._target_node, 'set_optional_port_visible') if self._target_node else 'N/A'}")
-            return
-        for opc_name, checkbox in self._optional_port_checkboxes.items():
-            checked = checkbox.isChecked()
-            logger.info(f"[OptionalPort] Applying '{opc_name}' -> {checked}")
-            self._target_node.set_optional_port_visible(opc_name, checked)
-
-    def _add_param_row(self, param, layout: QGridLayout, row: int) -> int:
-        """Create a ParamWidget handler and add its widget to the grid.
-
-        For regular params: [QLabel | widget]
-        For self-labeling params (CHANNEL_RANGE): [widget spans both columns]
-        """
-        handler = self._build_handler(param)
-        if handler is None:
-            return row + 1
-
-        widget = handler.widget
-        if widget is None:
-            return row + 1
-
-        if handler.needs_own_label():
-            layout.addWidget(widget, row, 0, 1, 2)
-        else:
-            label = QLabel(param.label or param.name)
-            layout.addWidget(label, row, 0)
-            layout.addWidget(widget, row, 1)
-
-        self._param_widgets[param.name] = (param, handler)
-        return row + 1
-
-    def _build_handler(self, param):
-        """Build a ParamWidget handler for a parameter definition.
-
-        FILE_LIST needs special treatment: its callbacks require the dialog
-        parent (self). All other types use the standard factory.
-        """
-        if param.param_type == ParamType.FILE_LIST:
-            filters = param.filters or "All Files (*)"
-            handler = FileListParamWidget(
-                param,
-                add_file_callback=lambda: self._on_add_files(param, filters),
-                add_folder_callback=lambda: self._on_add_folder(param),
-            )
-            handler.create_widget()
-            return handler
-
-        return create_param_widget(param)
-
-    # ── FileList callbacks (dialog parent = self) ───────────────────
-
-    def _on_add_files(self, param, filters: str):
-        files, _ = QFileDialog.getOpenFileNames(self, "选择图像文件", "", filters)
-        handler = self._get_handler(param.name)
-        if handler and files:
-            for f in files:
-                handler.add_file_item(f)
-
-    def _on_add_folder(self, param):
-        folder = QFileDialog.getExistingDirectory(self, "选择文件夹")
-        handler = self._get_handler(param.name)
-        if handler and folder:
-            handler.add_file_item(folder)
-
-    def _get_handler(self, param_name: str):
-        """Get the ParamWidget handler for a parameter name."""
-        entry = self._param_widgets.get(param_name)
-        return entry[1] if entry else None
-
-    # ── Generic dependency wiring ───────────────────────────────────
-
-    def _wire_dependencies(self, meta):
-        """Connect source param signals to dependent param callbacks.
-
-        For each parameter P where p.depends_on is set:
-          1. Find the source handler Q whose name matches p.depends_on.
-          2. Connect Q's value_changed_signal → P's on_dependency_change.
-          3. Fire an initial sync so P starts in the correct state.
-        """
-        for name, (param, handler) in self._param_widgets.items():
-            if not param.depends_on:
-                continue
-
-            source_name = param.depends_on
-            if source_name not in self._param_widgets:
-                continue
-
-            _, source_handler = self._param_widgets[source_name]
-            signal = source_handler.get_value_changed_signal()
-            if signal is not None:
-                signal.connect(
-                    lambda _unused=None, h=handler, sn=source_name, sh=source_handler:
-                        h.on_dependency_change(sn, sh.get_value())
-                )
-
-            # Initial sync
-            handler.on_dependency_change(source_name, source_handler.get_value())
-
-    # ── Value read / write (delegated to handlers) ──────────────────
-
-    def _set_param_values(self, values: dict):
-        for name, value in values.items():
-            handler = self._get_handler(name)
-            if handler:
-                handler.set_value(value)
-
-    def get_param_values(self) -> dict:
-        values = {}
-        for name, (param, handler) in self._param_widgets.items():
-            values[name] = handler.get_value()
-        return values
-
-    # ── OK / Replace ────────────────────────────────────────────────
+    # ── OK / Replace ────────────────────────────────────────────────────
 
     def _on_ok(self):
         node_id = self._combo_node.currentData()
         if not node_id:
             return
 
-        # 应用可选端口变更
-        self._apply_optional_port_changes()
+        self._param_panel.apply_optional_port_changes()
 
         if self._replace_mode and self._target_node:
             self._do_replace(node_id)
         else:
             self.node_type_selected.emit(node_id)
-
         self.accept()
 
     def _do_replace(self, new_node_id: str):
@@ -513,9 +310,7 @@ class NodeSelectorWindow(QDialog):
         new_meta = node_registry.get_meta(new_node_id)
 
         if old_meta is None or new_meta is None:
-            logger.error(f"Cannot replace: meta not found")
             return
-
         if old_meta.category != new_meta.category:
             QMessageBox.warning(self, "替换失败", "只能替换同类型的节点")
             return
@@ -525,3 +320,15 @@ class NodeSelectorWindow(QDialog):
 
     def get_selected_node_id(self) -> str:
         return self._combo_node.currentData() or ""
+
+    def get_param_values(self) -> dict:
+        return self._param_panel.get_param_values()
+
+
+# ── helpers ────────────────────────────────────────────────────────────
+
+def _h_separator() -> QFrame:
+    sep = QFrame()
+    sep.setFrameShape(QFrame.Shape.HLine)
+    sep.setFrameShadow(QFrame.Shadow.Sunken)
+    return sep

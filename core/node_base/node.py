@@ -51,6 +51,7 @@ class ParamDefinition:
     filters: str = ""
     multi: bool = False
     depends_on: str = ""
+    pinned: bool = False
 
     def __post_init__(self):
         if not self.label:
@@ -71,6 +72,20 @@ class NodeMeta:
     params: list[ParamDefinition] = field(default_factory=list)
     optional_ports: list[PortConfig] = field(default_factory=list)
     node_dir: str = ""
+
+    @property
+    def category_path(self) -> list[str]:
+        """返回分类路径列表，如 ["图像运算", "掩码操作", "高级"]"""
+        # 如果 category 包含 /，直接分割
+        if "/" in self.category:
+            return [p for p in self.category.split("/") if p]
+        # 兼容旧格式：category + subcategory
+        parts = []
+        if self.category:
+            parts.append(self.category)
+        if self.subcategory:
+            parts.append(self.subcategory)
+        return parts
 
     @classmethod
     def from_json(cls, data: dict, node_dir: str = "") -> NodeMeta:
@@ -106,11 +121,33 @@ class NodeMeta:
                 filters=p.get("filters", ""),
                 multi=p.get("multi", False),
                 depends_on=p.get("depends_on", ""),
+                pinned=p.get("pinned", False),
             ))
 
         optional_ports = []
         for p in data.get("optional_ports", []):
             optional_ports.append(PortConfig.from_dict(p))
+
+        # Deduplicate port labels across inputs, outputs, and optional_ports
+        seen_labels = set()
+        for port_list in [inputs, outputs]:
+            for port_def in port_list:
+                label = port_def.label or port_def.name
+                if label in seen_labels:
+                    logger.warning(
+                        f"Duplicate port label '{label}' in node '{data.get('id', '?')}' — "
+                        f"keeping first occurrence"
+                    )
+                seen_labels.add(label)
+
+        for opc in optional_ports:
+            label = opc.label or opc.name
+            if label in seen_labels:
+                logger.warning(
+                    f"Duplicate port label '{label}' in optional_ports of node '{data.get('id', '?')}' — "
+                    f"may cause registration errors"
+                )
+            seen_labels.add(label)
 
         return cls(
             id=data["id"],
@@ -325,6 +362,28 @@ class NodeBase:
         port = self.output_ports.get(port_name)
         if port:
             port.set_data(rois)
+
+    def _opt_enabled(self, name: str) -> bool:
+        """检查可选端口是否启用。
+
+        Args:
+            name: 可选端口名称。
+
+        Returns:
+            True if the optional port is enabled.
+        """
+        return self.params.get(f"_opt_{name}", False)
+
+    def _set_output_port(self, port_name: str, value):
+        """设置输出端口数据。
+
+        Args:
+            port_name: 输出端口名称。
+            value: 要设置的数据。
+        """
+        port = self.output_ports.get(port_name)
+        if port:
+            port.set_data(value)
 
     def set_state(self, state: NodeState):
         self.state = state

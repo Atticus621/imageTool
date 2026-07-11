@@ -26,11 +26,16 @@ if TYPE_CHECKING:
 class ExecutionEngine(IExecutionProvider):
     """Coordinates pipeline execution on a background thread.
 
+    Execution nodes are created lazily by the worker (just-in-time),
+    so the thread starts immediately.  Image outputs are emitted
+    incrementally for progressive viewer updates.
+
     Events (all via EventEmitter):
         on_started:           ()
         on_finished:          (ExecutionResult)
         on_node_state_changed:(name: str, state: str)
         on_progress:          (current: int, total: int)
+        on_image_output:      (entries: list[ImageSetEntry])
     """
 
     def __init__(self):
@@ -42,6 +47,7 @@ class ExecutionEngine(IExecutionProvider):
         self.on_finished = EventEmitter()
         self.on_node_state_changed = EventEmitter()
         self.on_progress = EventEmitter()
+        self.on_image_output = EventEmitter()
 
     def execute(self, graph: "NodeGraph"):
         if self._thread and self._thread.is_alive():

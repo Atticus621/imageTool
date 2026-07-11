@@ -1,0 +1,55 @@
+{
+    "id": "processing/preprocess/denoise",
+    "name": "降噪",
+    "category": "图像处理",
+    "subcategory": "预处理",
+    "description": "图像降噪：高斯模糊、中值滤波、双边滤波",
+    "version": "1.0.0",
+    "inputs": [
+        {"name": "images", "type": "image", "label": "图像输入"}
+    ],
+    "outputs": [
+        {"name": "images", "type": "image", "label": "图像输出"}
+    ],
+    "params": [
+        {
+            "name": "method",
+            "type": "combo",
+            "label": "降噪方法",
+            "default": "gaussian",
+            "pinned": true,
+            "options": [
+                {"value": "gaussian", "label": "高斯模糊"},
+                {"value": "median", "label": "中值滤波"},
+                {"value": "bilateral", "label": "双边滤波"}
+            ]
+        },
+        {
+            "name": "kernel_size",
+            "type": "int_slider",
+            "label": "核大小",
+            "default": 5,
+            "min": 3,
+            "max": 31,
+            "step": 2
+        },
+        {
+            "name": "sigma_color",
+            "type": "int_slider",
+            "label": "sigmaColor (双边)",
+            "default": 75,
+            "min": 10,
+            "max": 200,
+            "step": 5
+        },
+        {
+            "name": "sigma_space",
+            "type": "int_slider",
+            "label": "sigmaSpace (双边)",
+            "default": 75,
+            "min": 10,
+            "max": 200,
+            "step": 5
+        }
+    ]
+}

@@ -58,9 +58,20 @@ class DetectionBase(NodeBase):
             self._set_output_images("annotated", results)
         self._set_output_rois("rois", all_rois)
 
+        # Output optional statistics
+        count = len(all_rois)
+        if self._opt_enabled("count"):
+            self._set_output_port("count", count)
+        if self._opt_enabled("stats"):
+            if count > 0:
+                stats_text = f"检测到 {count} 个目标"
+            else:
+                stats_text = "未检测到目标"
+            self._set_output_port("stats", stats_text)
+
         logger.info(
             f"[{self.meta.name}] Processed {len(items)} images, "
-            f"output {len(all_rois)} ROIs"
+            f"output {count} ROIs"
         )
         self.set_state(NodeState.SUCCESS)
         return True

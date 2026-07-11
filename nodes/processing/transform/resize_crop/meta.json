@@ -1,0 +1,79 @@
+{
+    "id": "processing/transform/resize_crop",
+    "name": "缩放裁剪",
+    "category": "图像处理",
+    "subcategory": "预处理",
+    "description": "图像缩放、裁剪、旋转",
+    "version": "1.0.0",
+    "inputs": [
+        {"name": "images", "type": "image", "label": "图像输入"}
+    ],
+    "outputs": [
+        {"name": "images", "type": "image", "label": "图像输出"}
+    ],
+    "params": [
+        {
+            "name": "mode",
+            "type": "combo",
+            "label": "操作模式",
+            "default": "resize",
+            "pinned": true,
+            "options": [
+                {"value": "resize", "label": "缩放"},
+                {"value": "crop", "label": "裁剪"},
+                {"value": "rotate", "label": "旋转"}
+            ]
+        },
+        {
+            "name": "target_width",
+            "type": "int_slider",
+            "label": "目标宽度",
+            "default": 640,
+            "min": 1,
+            "max": 4096,
+            "step": 1
+        },
+        {
+            "name": "target_height",
+            "type": "int_slider",
+            "label": "目标高度",
+            "default": 480,
+            "min": 1,
+            "max": 4096,
+            "step": 1
+        },
+        {
+            "name": "keep_ratio",
+            "type": "checkbox",
+            "label": "保持宽高比",
+            "default": true
+        },
+        {
+            "name": "crop_x",
+            "type": "int_slider",
+            "label": "裁剪起始X",
+            "default": 0,
+            "min": 0,
+            "max": 4096,
+            "step": 1
+        },
+        {
+            "name": "crop_y",
+            "type": "int_slider",
+            "label": "裁剪起始Y",
+            "default": 0,
+            "min": 0,
+            "max": 4096,
+            "step": 1
+        },
+        {
+            "name": "angle",
+            "type": "float_slider",
+            "label": "旋转角度",
+            "default": 0.0,
+            "min": -180.0,
+            "max": 180.0,
+            "step": 1.0
+        }
+    ]
+}

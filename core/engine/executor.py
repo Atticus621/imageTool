@@ -30,9 +30,9 @@ class ExecutionWorker(QObject):
     node_finished = Signal(str, bool)
     all_finished = Signal(object)
 
-    def __init__(self, sorted_nodes: list, exec_nodes: dict, node_infos: dict):
+    def __init__(self, sorted_nodes: list, node_infos: dict):
         super().__init__()
-        self._pure = _PureWorker(sorted_nodes, exec_nodes, node_infos)
+        self._pure = _PureWorker(sorted_nodes, node_infos)
 
     def cancel(self):
         self._pure.cancel()
@@ -113,7 +113,7 @@ class ExecutionEngine(QObject):
                 logger.warning(f"Cannot create execution node for: {node_id}")
 
         self._thread = QThread()
-        self._worker = ExecutionWorker(sorted_nodes, exec_nodes, node_infos)
+        self._worker = ExecutionWorker(sorted_nodes, node_infos)
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.run)
