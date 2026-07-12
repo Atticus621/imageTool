@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, Signal
 
 from ui.widgets.range_slider import RangeSlider
 from ui.widgets.histogram_canvas import HistogramPreview
+from ui.theme import SPACING_SM, SPACING_XS
 
 
 class HistogramLUTWidget(QWidget):
@@ -20,8 +21,8 @@ class HistogramLUTWidget(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 3, 4, 3)
-        layout.setSpacing(4)
+        layout.setContentsMargins(SPACING_SM, SPACING_XS, SPACING_SM, SPACING_XS)
+        layout.setSpacing(SPACING_SM)
 
         # Histogram preview
         self._histogram = HistogramPreview()

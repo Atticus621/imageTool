@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QComboBox
 from PySide6.QtCore import Signal
 
 from NodeGraphQt.widgets.node_widgets import NodeBaseWidget
+from ui.theme import SPACING_SM, SPACING_XS
 
 
 class ColorConversionWidget(NodeBaseWidget):
@@ -33,34 +34,15 @@ class ColorConversionWidget(NodeBaseWidget):
     def _setup_ui(self):
         container = QWidget()
         layout = QHBoxLayout(container)
-        layout.setContentsMargins(4, 2, 4, 2)
-        layout.setSpacing(6)
+        layout.setContentsMargins(SPACING_SM, SPACING_XS, SPACING_SM, SPACING_XS)
+        layout.setSpacing(SPACING_SM)
 
         label = QLabel("目标色彩空间:")
-        label.setStyleSheet("color: #cccccc; font-size: 10px;")
         layout.addWidget(label)
 
         self._combo = QComboBox()
         for value, text in self.COLOR_SPACES:
             self._combo.addItem(text, value)
-        self._combo.setStyleSheet("""
-            QComboBox {
-                background: #2b2b3d;
-                color: #cccccc;
-                border: 1px solid #555555;
-                border-radius: 3px;
-                padding: 2px 6px;
-                font-size: 10px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox QAbstractItemView {
-                background: #2b2b3d;
-                color: #cccccc;
-                selection-background-color: #3b3b4d;
-            }
-        """)
         self._combo.currentIndexChanged.connect(self._on_selection_changed)
         layout.addWidget(self._combo, 1)
 

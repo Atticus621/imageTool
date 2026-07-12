@@ -6,6 +6,9 @@ from PySide6.QtCore import Qt, Signal, QRectF
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QBrush
 from PySide6.QtWidgets import QWidget
 
+from ui.theme import (SLIDER_TRACK, SLIDER_RANGE, SLIDER_HANDLE,
+                      SLIDER_HANDLE_HOVER, SLIDER_HANDLE_DRAG)
+
 
 class RangeSlider(QWidget):
     """A horizontal slider with two draggable handles for range selection.
@@ -28,11 +31,11 @@ class RangeSlider(QWidget):
     TRACK_RADIUS = 3
     HIT_MARGIN = 12  # extra px on each side of handle for mouse hit detection
 
-    COLOR_TRACK = QColor(70, 70, 80)
-    COLOR_RANGE = QColor(0, 150, 200)
-    COLOR_HANDLE = QColor(0, 180, 230)
-    COLOR_HANDLE_HOVER = QColor(60, 210, 255)
-    COLOR_HANDLE_DRAG = QColor(100, 230, 255)
+    COLOR_TRACK = QColor(SLIDER_TRACK)
+    COLOR_RANGE = QColor(SLIDER_RANGE)
+    COLOR_HANDLE = QColor(SLIDER_HANDLE)
+    COLOR_HANDLE_HOVER = QColor(SLIDER_HANDLE_HOVER)
+    COLOR_HANDLE_DRAG = QColor(SLIDER_HANDLE_DRAG)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)

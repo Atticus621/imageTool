@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel,
 )
 
+from ui.theme import TEXT_SECONDARY, ACCENT, FONT_SIZE_SM
+
 
 class InfoPanelWidget(QFrame):
     """Embedded panel showing pixel coordinates, color values, and image size.
@@ -21,7 +23,7 @@ class InfoPanelWidget(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setMaximumHeight(36)
+        self.setMaximumHeight(40)
         self._init_ui()
         self._show_placeholder()
 
@@ -32,17 +34,17 @@ class InfoPanelWidget(QFrame):
 
         # Position
         self._pos_label = QLabel()
-        self._pos_label.setStyleSheet("font-size: 10px; color: #aaa;")
+        self._pos_label.setStyleSheet(f"font-size: {FONT_SIZE_SM}; color: {TEXT_SECONDARY};")
         layout.addWidget(self._pos_label)
 
         # Image size
         self._size_label = QLabel()
-        self._size_label.setStyleSheet("font-size: 10px; color: #aaa;")
+        self._size_label.setStyleSheet(f"font-size: {FONT_SIZE_SM}; color: {TEXT_SECONDARY};")
         layout.addWidget(self._size_label)
 
         # Channel values
         self._channels_label = QLabel()
-        self._channels_label.setStyleSheet("font-size: 10px; color: #0ff;")
+        self._channels_label.setStyleSheet(f"font-size: {FONT_SIZE_SM}; color: {ACCENT};")
         self._channels_label.setWordWrap(False)
         layout.addWidget(self._channels_label, 1)
 

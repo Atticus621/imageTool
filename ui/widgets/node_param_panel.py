@@ -13,6 +13,7 @@ from core.node_base.node import ParamType
 from ui.param_widgets import create_param_widget, FileListParamWidget
 from ui.widgets.collapsible_group_box import CollapsibleGroupBox
 from core.logger import logger
+from ui.theme import TEXT_PRIMARY, TEXT_MUTED
 
 
 class NodeParamPanel(QWidget):
@@ -52,6 +53,7 @@ class NodeParamPanel(QWidget):
 
         info_label = QLabel(f"<b>{meta.name}</b><br>{meta.description}")
         info_label.setWordWrap(True)
+        info_label.setStyleSheet(f"color: {TEXT_PRIMARY};")
         self._layout.addWidget(info_label)
 
         # Input ports group
@@ -115,7 +117,7 @@ class NodeParamPanel(QWidget):
                 self._add_optional_port_checkbox(opc, layout)
         else:
             lbl = QLabel(empty_text)
-            lbl.setStyleSheet("color: gray;")
+            lbl.setStyleSheet(f"color: {TEXT_MUTED};")
             layout.addWidget(lbl)
         group.finalize()
         self._layout.addWidget(group)

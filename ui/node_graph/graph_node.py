@@ -4,6 +4,7 @@ from NodeGraphQt import BaseNode
 
 from core.logger import logger
 from core.pipeline import PipelineNodeInfo
+from ui.theme import PORT_COLORS
 
 
 class GraphNode(BaseNode):
@@ -45,6 +46,14 @@ class GraphNode(BaseNode):
             port_name = pdef.label or pdef.name
             self.add_input(port_name, multi_input=True, display_name=True)
             self._port_label_to_name[port_name] = pdef.name
+            # Set port color based on type
+            port = self.get_input(port_name)
+            if port and pdef.port_type.value in PORT_COLORS:
+                hex_color = PORT_COLORS[pdef.port_type.value]
+                r = int(hex_color[1:3], 16)
+                g = int(hex_color[3:5], 16)
+                b = int(hex_color[5:7], 16)
+                port.color = (r, g, b, 255)
             if pdef.count_param:
                 group = self._port_count_groups.setdefault(pdef.count_param, [])
                 group.append(port_name)
@@ -53,6 +62,14 @@ class GraphNode(BaseNode):
             port_name = pdef.label or pdef.name
             self.add_output(port_name, multi_output=True, display_name=True)
             self._port_label_to_name[port_name] = pdef.name
+            # Set port color based on type
+            port = self.get_output(port_name)
+            if port and pdef.port_type.value in PORT_COLORS:
+                hex_color = PORT_COLORS[pdef.port_type.value]
+                r = int(hex_color[1:3], 16)
+                g = int(hex_color[3:5], 16)
+                b = int(hex_color[5:7], 16)
+                port.color = (r, g, b, 255)
 
         for p in meta.params:
             if p.default is not None:
@@ -152,13 +169,14 @@ class GraphNode(BaseNode):
 
     def update_state_color(self, state: str):
         self._state = state
+        from ui.theme import NODE_IDLE, NODE_RUNNING, NODE_SUCCESS, NODE_ERROR
         colors = {
-            "idle": (128, 128, 128),
-            "running": (255, 200, 0),
-            "success": (0, 200, 0),
-            "error": (220, 50, 50),
+            "idle": NODE_IDLE,
+            "running": NODE_RUNNING,
+            "success": NODE_SUCCESS,
+            "error": NODE_ERROR,
         }
-        self.set_color(*colors.get(state, (128, 128, 128)))
+        self.set_color(*colors.get(state, NODE_IDLE))
 
     # ── serialization helpers ────────────────────────────────────────────
 

@@ -6,6 +6,8 @@ from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QCheckB
 from PySide6.QtGui import QPixmap, QPainter, QColor, QPen, QPolygonF
 from PySide6.QtCore import Qt, Signal, QPointF, QRect
 
+from ui.theme import BG_BASE, BORDER_DEFAULT, TEXT_PRIMARY, TEXT_MUTED, SPACING_SM, SPACING_XS
+
 
 _CHANNEL_STYLESHEET = """
 QCheckBox {{
@@ -38,7 +40,7 @@ class HistogramPreview(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(self.W, self.H)
-        self.setStyleSheet("background: #1e1e2e; border: 1px solid #444;")
+        self.setStyleSheet(f"background: {BG_BASE}; border: 1px solid {BORDER_DEFAULT};")
 
         self._dpr = max(self.devicePixelRatio(), 2)
 
@@ -52,8 +54,8 @@ class HistogramPreview(QWidget):
 
         # --- layout ---
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(4, 3, 4, 3)
-        outer.setSpacing(2)
+        outer.setContentsMargins(SPACING_SM, SPACING_XS, SPACING_SM, SPACING_XS)
+        outer.setSpacing(SPACING_XS)
 
         # channel toggle row
         self._toggle_layout = QHBoxLayout()
@@ -141,9 +143,9 @@ class HistogramPreview(QWidget):
 
     def _draw_empty(self):
         pm = self._make_pixmap()
-        pm.fill(QColor("#1e1e2e"))
+        pm.fill(QColor(BG_BASE))
         p = QPainter(pm)
-        p.setPen(QColor("#666666"))
+        p.setPen(QColor("#5a5a75"))
         font = p.font()
         font.setPointSize(9)
         p.setFont(font)
@@ -159,7 +161,7 @@ class HistogramPreview(QWidget):
         pm = self._make_pixmap()
         lw = pm.width() // self._dpr
         lh = pm.height() // self._dpr
-        pm.fill(QColor("#1e1e2e"))
+        pm.fill(QColor(BG_BASE))
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
 
@@ -168,7 +170,7 @@ class HistogramPreview(QWidget):
         ph = lh - mt - mb
 
         # axes
-        p.setPen(QPen(QColor("#555555"), 1.5))
+        p.setPen(QPen(QColor(BORDER_DEFAULT), 1.5))
         p.drawLine(ml, mt, ml, mt + ph)
         p.drawLine(ml, mt + ph, ml + pw, mt + ph)
 
@@ -211,7 +213,7 @@ class HistogramPreview(QWidget):
                 p.drawLine(pts[i + 1], pts[i + 2])
 
         # title & axis labels
-        p.setPen(QColor("#cccccc"))
+        p.setPen(QColor(TEXT_PRIMARY))
         font = p.font()
         font.setPointSize(9)
         p.setFont(font)

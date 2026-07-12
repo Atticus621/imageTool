@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 from ui.widgets.zoomable_graphics_view import ZoomableGraphicsView
 from ui.widgets.coordinate_mapper import CoordinateMapper
+from ui.theme import BG_BASE, BORDER_DEFAULT, RADIUS_MD
 
 from core.image_data import ImageData
 from core.logger import logger
@@ -71,14 +72,13 @@ class ImageSetWidget(QFrame):
         layout.setContentsMargins(4, 4, 4, 4)
 
         self._header = QLabel(f"{self._name} ({len(self._images)} 张)")
-        self._header.setStyleSheet("font-weight: bold; font-size: 10px;")
         self._header.setWordWrap(False)
         layout.addWidget(self._header)
 
         # --- QGraphicsView — native zoom + pan ---
         self._gv = ZoomableGraphicsView()
         self._gv.setStyleSheet(
-            "background-color: #1a1a2e; border: 1px solid #333; border-radius: 4px;"
+            f"background-color: {BG_BASE}; border: 1px solid {BORDER_DEFAULT}; border-radius: {RADIUS_MD};"
         )
         self._gv.setMinimumHeight(180)
         self._gv.setMaximumHeight(600)
@@ -96,9 +96,6 @@ class ImageSetWidget(QFrame):
 
         # Measurement result label (hidden by default)
         self._measurement_label = QLabel("")
-        self._measurement_label.setStyleSheet(
-            "color: #00c8ff; font-size: 10px; padding: 2px;"
-        )
         self._measurement_label.hide()
         layout.addWidget(self._measurement_label)
 
@@ -374,7 +371,6 @@ class ImageViewerWidget(QWidget):
         # Toolbar
         toolbar = QHBoxLayout()
         self._mode_combo = QComboBox()
-        self._mode_combo.setStyleSheet("font-size: 10px;")
         self._mode_combo.setMinimumWidth(100)
         self._mode_combo.addItem("输出显示", "output")
         self._mode_combo.addItem("输入显示", "input")
@@ -383,7 +379,6 @@ class ImageViewerWidget(QWidget):
         toolbar.addWidget(self._mode_combo)
 
         self._set_combo = QComboBox()
-        self._set_combo.setStyleSheet("font-size: 10px;")
         self._set_combo.setMinimumWidth(120)
         self._set_combo.currentIndexChanged.connect(self._on_set_changed)
         toolbar.addWidget(QLabel("图集:"))
@@ -403,7 +398,6 @@ class ImageViewerWidget(QWidget):
         # Placeholder
         self._placeholder = QLabel("暂无图像数据\n\n请搭建节点并点击 ▶ 开始 执行")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.setStyleSheet("color: #666; font-size: 10px;")
         layout.addWidget(self._placeholder)
 
         self._refresh_display()

@@ -24,9 +24,9 @@ ui:
   right_panel_ratio: 0.45
   theme: "dark_teal.xml"
   extra:
-    danger: "#dc3545"
-    warning: "#ffc107"
-    success: "#28a745"
+    danger: "#ff453a"
+    warning: "#ffb800"
+    success: "#34c759"
     font_family: "Segoe UI"
     font_size: "10px"
     density_scale: "0"

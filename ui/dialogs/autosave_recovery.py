@@ -32,12 +32,10 @@ class AutoSaveRecoveryDialog(QDialog):
 
         # Icon and message
         icon_label = QLabel("⚠️")
-        icon_label.setStyleSheet("font-size: 48px;")
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(icon_label)
 
         title = QLabel("发现自动保存的项目文件")
-        title.setStyleSheet("font-size: 16px; font-weight: bold;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
@@ -62,7 +60,6 @@ class AutoSaveRecoveryDialog(QDialog):
         recover_btn = buttons.addButton(
             "恢复自动保存", QDialogButtonBox.ButtonRole.AcceptRole
         )
-        recover_btn.setStyleSheet("background-color: #4CAF50; color: white;")
 
         discard_btn = buttons.addButton(
             "不恢复", QDialogButtonBox.ButtonRole.RejectRole

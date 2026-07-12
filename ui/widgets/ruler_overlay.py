@@ -19,6 +19,9 @@ from core.diagnostic.state_tracker import StateTracker
 from systems.image_display.ruler.measure import MeasurementResult
 from ui.widgets.coordinate_mapper import CoordinateMapper
 from ui.widgets.event_guard import EventGuard
+from ui.theme import (RULER_LINE, RULER_PREVIEW, RULER_ENDPOINT,
+                      RULER_LABEL_BG, RULER_LABEL_ALPHA,
+                      FONT_FAMILY_MONO, FONT_SIZE_XS)
 
 
 @dataclass
@@ -200,7 +203,7 @@ class RulerOverlay(QWidget):
         screen_start = self._mapper.image_to_viewport(*img_m.img_start)
         screen_end = self._mapper.image_to_viewport(*img_m.img_end)
 
-        pen = QPen(QColor(0, 200, 255, 220), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(QColor(RULER_LINE), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
         painter.drawLine(screen_start, screen_end)
 
@@ -214,7 +217,7 @@ class RulerOverlay(QWidget):
         self._draw_distance_label(painter, screen_start, screen_end, text)
 
     def _draw_preview(self, painter: QPainter):
-        pen = QPen(QColor(255, 200, 0, 200), 2, Qt.PenStyle.DashLine)
+        pen = QPen(QColor(RULER_PREVIEW), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
 
         painter.drawLine(self._start_point, self._current_point)
@@ -238,14 +241,14 @@ class RulerOverlay(QWidget):
         self._draw_distance_label(painter, self._start_point, self._current_point, text)
 
     def _draw_endpoint(self, painter: QPainter, point: QPointF):
-        painter.setBrush(QColor(0, 200, 255))
+        painter.setBrush(QColor(RULER_ENDPOINT))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(point, 4, 4)
 
     def _draw_distance_label(self, painter: QPainter, p1: QPointF, p2: QPointF, text: str):
         mid = QPointF((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2)
 
-        font = QFont("Consolas", 9)
+        font = QFont(FONT_FAMILY_MONO, 9)
         painter.setFont(font)
         metrics = painter.fontMetrics()
         text_width = metrics.horizontalAdvance(text)
@@ -262,9 +265,11 @@ class RulerOverlay(QWidget):
             label_y = mid.y() - text_height / 2
 
         bg_rect = QRectF(label_x - 4, label_y - 2, text_width + 8, text_height + 4)
-        painter.setBrush(QColor(0, 0, 0, 200))
+        bg_color = QColor(RULER_LABEL_BG)
+        bg_color.setAlpha(RULER_LABEL_ALPHA)
+        painter.setBrush(bg_color)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(bg_rect, 4, 4)
 
-        painter.setPen(QColor(0, 200, 255))
+        painter.setPen(QColor(RULER_ENDPOINT))
         painter.drawText(label_x, label_y + text_height - metrics.descent(), text)

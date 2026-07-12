@@ -13,6 +13,8 @@ from PySide6.QtCore import Signal
 
 from NodeGraphQt.widgets.node_widgets import NodeBaseWidget
 
+# Styling is handled by custom.css — no inline setStyleSheet needed.
+
 
 class PinnedComboWidget(NodeBaseWidget):
     """Embedded combo box for a pinned parameter."""
@@ -33,18 +35,6 @@ class PinnedComboWidget(NodeBaseWidget):
                 self._combo.addItem(opt.get("label", opt.get("value", "")), opt.get("value"))
             else:
                 self._combo.addItem(str(opt), opt)
-        self._combo.setStyleSheet("""
-            QComboBox {
-                background: #2b2b3d; color: #cccccc;
-                border: 1px solid #555555; border-radius: 3px;
-                padding: 2px 4px; font-size: 10px;
-            }
-            QComboBox::drop-down { border: none; }
-            QComboBox QAbstractItemView {
-                background: #2b2b3d; color: #cccccc;
-                selection-background-color: #3b3b4d;
-            }
-        """)
 
         # Set default
         if default is not None:
@@ -86,21 +76,6 @@ class PinnedCheckboxWidget(NodeBaseWidget):
     def _setup_ui(self, label: str, default: bool):
         self._checkbox = QCheckBox(label)
         self._checkbox.setChecked(default)
-        self._checkbox.setStyleSheet("""
-            QCheckBox {
-                color: #cccccc; font-size: 10px;
-            }
-            QCheckBox::indicator {
-                width: 12px; height: 12px;
-                border: 1px solid #555555;
-                border-radius: 2px;
-                background: #2b2b3d;
-            }
-            QCheckBox::indicator:checked {
-                background: #0078d4;
-                border-color: #0078d4;
-            }
-        """)
         self._checkbox.toggled.connect(self._on_changed)
         self.set_custom_widget(self._checkbox)
 
@@ -141,13 +116,6 @@ class PinnedSliderWidget(NodeBaseWidget):
             self._spinbox.setValue(int(default) if default is not None else int(min_val))
             self._spinbox.valueChanged.connect(lambda v: self.valueChanged.emit(v))
 
-        self._spinbox.setStyleSheet("""
-            QSpinBox, QDoubleSpinBox {
-                background: #2b2b3d; color: #cccccc;
-                border: 1px solid #555555; border-radius: 3px;
-                padding: 2px 4px; font-size: 10px;
-            }
-        """)
         self._spinbox.setFixedWidth(60)
         self.set_custom_widget(self._spinbox)
 

@@ -1,6 +1,7 @@
 """NodeGraphWidget — Qt widget wrapping a NodeGraphQt canvas."""
 
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QInputDialog
 
 from NodeGraphQt import NodeGraph, GroupNode
@@ -14,6 +15,7 @@ from ui.node_graph.graph_node import GraphNode
 from ui.node_graph.clipboard_manager import ClipboardManager
 from ui.node_graph.shortcut_handler import ShortcutHandler
 from ui.node_graph.context_menu_builder import ContextMenuBuilder
+from ui.theme import BG_CANVAS
 
 
 class NodeGraphWidget(QWidget):
@@ -56,7 +58,8 @@ class NodeGraphWidget(QWidget):
         self._graph.set_acyclic(True)
         self._graph.set_pipe_collision(True)
         self._graph.set_pipe_slicing(False)
-        self._graph.set_background_color(35, 35, 50)
+        bg = QColor(BG_CANVAS)
+        self._graph.set_background_color(bg.red(), bg.green(), bg.blue())
 
         self._menu_builder = ContextMenuBuilder(
             node_registry, self._create_node_by_id)

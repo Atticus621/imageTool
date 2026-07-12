@@ -120,7 +120,6 @@ class FileListParamWidget(ParamWidget):
         # Model info label (hidden by default, shown for .pt files)
         info_label = QLabel("")
         info_label.setWordWrap(True)
-        info_label.setStyleSheet("color: #666; font-size: 10px;")
         info_label.hide()
         layout.addWidget(info_label)
         self._model_info_label = info_label

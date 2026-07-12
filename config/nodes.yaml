@@ -63,3 +63,14 @@ categories:
         order: 5
       - id: "detection/ai/yolo_detect"
         order: 6
+
+  - key: "变量"
+    name: "变量"
+    order: 4
+    nodes:
+      - id: "variable/set"
+        order: 1
+      - id: "variable/get"
+        order: 2
+      - id: "variable/math"
+        order: 3

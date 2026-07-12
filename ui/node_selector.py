@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from core.logger import logger
 from core.node_base.registry import node_registry
 from ui.widgets.node_param_panel import NodeParamPanel
+from ui.theme import BG_SURFACE
 
 
 class NodeSelectorWindow(QDialog):
@@ -29,6 +30,7 @@ class NodeSelectorWindow(QDialog):
         self._replace_mode = False
         self._edit_mode = False
         self._current_meta = None
+        self.setStyleSheet(f"QDialog {{ background: {BG_SURFACE}; }}")
 
         # Parameter panel (extracted widget)
         self._param_panel = NodeParamPanel(dialog_parent=self)
