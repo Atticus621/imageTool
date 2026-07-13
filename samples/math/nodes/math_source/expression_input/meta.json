@@ -1,0 +1,29 @@
+{
+  "id": "math_source/expression_input",
+  "name": "表达式输入",
+  "category": "公式输入",
+  "description": "输入数学表达式",
+  "version": "1.0.0",
+  "inputs": [],
+  "outputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "表达式"
+    }
+  ],
+  "params": [
+    {
+      "name": "expression_text",
+      "type": "text",
+      "label": "表达式",
+      "default": "x**2 + 2*x + 1"
+    },
+    {
+      "name": "variables",
+      "type": "text",
+      "label": "变量 (逗号分隔)",
+      "default": "x"
+    }
+  ]
+}

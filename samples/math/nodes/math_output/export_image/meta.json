@@ -1,0 +1,37 @@
+{
+  "id": "math_output/export_image",
+  "name": "导出图片",
+  "category": "输出",
+  "description": "将表达式导出为图片",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输入表达式"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "image",
+      "type": "any",
+      "label": "图片"
+    }
+  ],
+  "params": [
+    {
+      "name": "output_path",
+      "type": "text",
+      "label": "输出路径",
+      "default": "output.png"
+    },
+    {
+      "name": "dpi",
+      "type": "int_slider",
+      "label": "DPI",
+      "default": 150,
+      "min": 72,
+      "max": 300
+    }
+  ]
+}

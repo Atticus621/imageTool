@@ -1,0 +1,35 @@
+{
+  "id": "math_solver/ode",
+  "name": "微分方程",
+  "category": "方程求解",
+  "description": "求解常微分方程",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "微分方程"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "解"
+    }
+  ],
+  "params": [
+    {
+      "name": "function",
+      "type": "text",
+      "label": "未知函数",
+      "default": "y"
+    },
+    {
+      "name": "independent_var",
+      "type": "text",
+      "label": "自变量",
+      "default": "x"
+    }
+  ]
+}

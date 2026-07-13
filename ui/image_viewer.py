@@ -1,10 +1,7 @@
 """Image viewer widget — displays pipeline execution results.
 
 Uses QGraphicsView for zoom/pan — zero custom zoom/pan/scroll logic.
-QGraphicsView handles: AnchorUnderMouse (zoom-to-cursor),
-ScrollHandDrag (middle-button pan), SmoothPixmapTransform (render quality).
-
-Depends on ImageDisplaySystem for color-space-aware numpy→QPixmap conversion.
+Supports multiple data types: images, text, and generic data.
 """
 
 from __future__ import annotations
@@ -20,12 +17,35 @@ from ui.widgets.zoomable_graphics_view import ZoomableGraphicsView
 from ui.widgets.coordinate_mapper import CoordinateMapper
 from ui.theme import BG_BASE, BORDER_DEFAULT, RADIUS_MD
 
-from core.image_data import ImageData
 from core.logger import logger
 from systems.execution.result import ExecutionResult
-from core.interfaces import IImageDisplayProvider
-from systems.image_display.models import DisplayInfo
-from ui.widgets.ruler_overlay import RulerOverlay
+
+# Conditional imports - these may not exist in all tools
+try:
+    from core.image_data import ImageData
+except ImportError:
+    ImageData = None
+
+try:
+    from core.interfaces import IImageDisplayProvider
+except ImportError:
+    IImageDisplayProvider = None
+
+try:
+    from systems.image_display.models import DisplayInfo
+except ImportError:
+    from dataclasses import dataclass
+    @dataclass
+    class DisplayInfo:
+        actual_w: int = 0
+        actual_h: int = 0
+        display_w: int = 0
+        display_h: int = 0
+
+try:
+    from ui.widgets.ruler_overlay import RulerOverlay
+except ImportError:
+    RulerOverlay = None
 
 
 # ------------------------------------------------------------------
@@ -184,21 +204,58 @@ class ImageSetWidget(QFrame):
         self._update_image_display(fit=True)
 
     def _update_image_display(self, fit: bool = False):
-        """Load the current image into the scene, scaling the pixmap to the
-        viewport resolution while keeping scene coordinates equal to original
-        image pixels (so coordinate mapping stays correct).
+        """Load the current item into the scene.
+
+        Supports multiple data types:
+        - numpy arrays: displayed as images
+        - strings: displayed as text
+        - ImageData: unwrapped to numpy array
+        - Other: converted to string
         """
         raw = self._images[self._current_index]
-        if isinstance(raw, ImageData):
+
+        # Handle string data (text, formulas, etc.)
+        if isinstance(raw, str):
+            self._show_text(raw, fit=fit)
+            return
+
+        # Handle numpy array or ImageData
+        if ImageData is not None and isinstance(raw, ImageData):
             img = raw.array
             self._current_color_space = raw.color_space
         else:
             img = raw
             self._current_color_space = "bgr"
 
-        self._actual_h, self._actual_w = img.shape[:2]
-        self._mapper.update_image_size(self._actual_w, self._actual_h)
-        self._load_pixmap(img, fit=fit)
+        # Check if it's a numpy array
+        try:
+            if isinstance(img, np.ndarray):
+                self._actual_h, self._actual_w = img.shape[:2]
+                self._mapper.update_image_size(self._actual_w, self._actual_h)
+                self._load_pixmap(img, fit=fit)
+                return
+        except Exception:
+            pass
+
+        # Fallback: display as text
+        self._show_text(str(raw), fit=fit)
+
+    def _show_text(self, text: str, fit: bool = False):
+        """Display text content in the scene."""
+        self._scene.clear()
+        text_item = self._scene.addText(text)
+        text_item.setDefaultTextColor(Qt.GlobalColor.white)
+        font = text_item.font()
+        font.setPointSize(14)
+        text_item.setFont(font)
+        self._scene.setSceneRect(QRectF(0, 0, 400, 100))
+        if fit:
+            self._gv.fitInView(
+                self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
+            )
+        for i, btn in enumerate(self._thumb_buttons):
+            btn.setChecked(i == self._current_index)
+        self.image_changed.emit()
 
     def _load_pixmap(self, img: np.ndarray, fit: bool = False):
         """Convert the image to a viewport-sized QPixmap and add it to the scene.

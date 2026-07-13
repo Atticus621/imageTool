@@ -1,0 +1,22 @@
+{
+  "id": "math_operations/expand",
+  "name": "展开",
+  "category": "表达式运算",
+  "description": "展开数学表达式",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输入表达式"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输出表达式"
+    }
+  ],
+  "params": []
+}

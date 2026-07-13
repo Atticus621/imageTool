@@ -1,0 +1,51 @@
+categories:
+  - key: "模型输入"
+    name: "模型输入"
+    order: 1
+    nodes:
+      - id: "dl_source/load_model"
+        order: 1
+      - id: "dl_source/load_dataset"
+        order: 2
+
+  - key: "模型分析"
+    name: "模型分析"
+    order: 2
+    nodes:
+      - id: "dl_analysis/model_summary"
+        order: 1
+      - id: "dl_analysis/layer_inspector"
+        order: 2
+      - id: "dl_analysis/weight_stats"
+        order: 3
+
+  - key: "可视化"
+    name: "可视化"
+    order: 3
+    nodes:
+      - id: "dl_viz/architecture_graph"
+        order: 1
+      - id: "dl_viz/weight_histogram"
+        order: 2
+      - id: "dl_viz/feature_map"
+        order: 3
+      - id: "dl_viz/training_curve"
+        order: 4
+
+  - key: "输出"
+    name: "输出"
+    order: 4
+    nodes:
+      - id: "dl_output/export_image"
+        order: 1
+      - id: "dl_output/export_html"
+        order: 2
+
+  - key: "变量"
+    name: "变量"
+    order: 5
+    nodes:
+      - id: "variable/set"
+        order: 1
+      - id: "variable/get"
+        order: 2

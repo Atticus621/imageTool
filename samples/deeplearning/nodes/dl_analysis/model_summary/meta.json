@@ -1,0 +1,22 @@
+{
+  "id": "dl_analysis/model_summary",
+  "name": "模型摘要",
+  "category": "模型分析",
+  "description": "显示模型结构摘要",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "model",
+      "type": "any",
+      "label": "模型"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "text",
+      "type": "string",
+      "label": "摘要文本"
+    }
+  ],
+  "params": []
+}

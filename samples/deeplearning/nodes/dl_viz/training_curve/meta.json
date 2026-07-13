@@ -1,0 +1,34 @@
+{
+  "id": "dl_viz/training_curve",
+  "name": "训练曲线",
+  "category": "可视化",
+  "description": "绘制训练损失/准确率曲线",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "data",
+      "type": "any",
+      "label": "训练数据"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "image",
+      "type": "any",
+      "label": "曲线图"
+    }
+  ],
+  "params": [
+    {
+      "name": "metric",
+      "type": "combo",
+      "label": "指标",
+      "default": "loss",
+      "options": [
+        {"value": "loss", "label": "损失"},
+        {"value": "accuracy", "label": "准确率"},
+        {"value": "both", "label": "两者"}
+      ]
+    }
+  ]
+}

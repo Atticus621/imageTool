@@ -1,0 +1,22 @@
+{
+  "id": "math_matrix/eigenvalues",
+  "name": "特征值",
+  "category": "矩阵运算",
+  "description": "计算矩阵特征值",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "matrix",
+      "type": "matrix",
+      "label": "输入矩阵"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "特征值"
+    }
+  ],
+  "params": []
+}

@@ -1,0 +1,29 @@
+{
+  "id": "math_solver/solve",
+  "name": "方程求解",
+  "category": "方程求解",
+  "description": "求解方程",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "方程表达式"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "解"
+    }
+  ],
+  "params": [
+    {
+      "name": "variable",
+      "type": "text",
+      "label": "求解变量",
+      "default": "x"
+    }
+  ]
+}

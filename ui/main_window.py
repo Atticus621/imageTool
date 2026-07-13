@@ -493,12 +493,20 @@ class MainWindow(QMainWindow):
         logger.info("Engine started")
 
     # ------------------------------------------------------------------
-    # Embedded widget support — factory functions at module level
-    # so @EmbeddedWidgetRegistry.register decorators work.
+    # Embedded widget support — override in subclasses for node-specific updates
     # ------------------------------------------------------------------
 
     def _update_embedded_widgets(self):
-        from nodes.processing.statistics.histogram.node import HistogramNode
+        """Update embedded widgets on graph nodes.
+
+        Override this method in subclasses to handle node-specific
+        embedded widget updates. Default implementation handles histogram nodes.
+        """
+        try:
+            from nodes.processing.statistics.histogram.node import HistogramNode
+        except ImportError:
+            return
+
         graph = self._node_graph_widget.graph
         for gn in graph.all_nodes():
             if not isinstance(gn, GraphNode):
@@ -575,10 +583,13 @@ class MainWindow(QMainWindow):
         self._statusbar.showMessage(f"测量结果: {result.pixel_distance:.1f} 像素")
 
     def _on_about(self):
+        app_name = config.get("app.name", "ImageTools")
+        app_version = config.get("app.version", "0.1.0")
+        window_title = config.get("ui.window_title", "图像处理蓝图工具")
         QMessageBox.about(
             self,
-            "关于 ImageTools",
-            f"ImageTools {config.get('app.version', '0.1.0')}\n\n图像处理蓝图工具",
+            f"关于 {app_name}",
+            f"{app_name} {app_version}\n\n{window_title}",
         )
 
     # ------------------------------------------------------------------

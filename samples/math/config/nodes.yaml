@@ -1,0 +1,64 @@
+categories:
+  - key: "公式输入"
+    name: "公式输入"
+    order: 1
+    nodes:
+      - id: "math_source/expression_input"
+        order: 1
+      - id: "math_source/matrix_input"
+        order: 2
+
+  - key: "表达式运算"
+    name: "表达式运算"
+    order: 2
+    nodes:
+      - id: "math_operations/simplify"
+        order: 1
+      - id: "math_operations/expand"
+        order: 2
+      - id: "math_operations/factor"
+        order: 3
+      - id: "math_operations/derivative"
+        order: 4
+      - id: "math_operations/integral"
+        order: 5
+
+  - key: "方程求解"
+    name: "方程求解"
+    order: 3
+    nodes:
+      - id: "math_solver/solve"
+        order: 1
+      - id: "math_solver/ode"
+        order: 2
+
+  - key: "矩阵运算"
+    name: "矩阵运算"
+    order: 4
+    nodes:
+      - id: "math_matrix/determinant"
+        order: 1
+      - id: "math_matrix/inverse"
+        order: 2
+      - id: "math_matrix/eigenvalues"
+        order: 3
+
+  - key: "输出"
+    name: "输出"
+    order: 5
+    nodes:
+      - id: "math_output/latex_render"
+        order: 1
+      - id: "math_output/graph_plot"
+        order: 2
+      - id: "math_output/export_image"
+        order: 3
+
+  - key: "变量"
+    name: "变量"
+    order: 6
+    nodes:
+      - id: "variable/set"
+        order: 1
+      - id: "variable/get"
+        order: 2

@@ -1,0 +1,29 @@
+{
+  "id": "variable/set",
+  "name": "设置变量",
+  "category": "变量",
+  "description": "设置一个变量值",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "value",
+      "type": "any",
+      "label": "值"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "value",
+      "type": "any",
+      "label": "值"
+    }
+  ],
+  "params": [
+    {
+      "name": "var_name",
+      "type": "text",
+      "label": "变量名",
+      "default": "my_var"
+    }
+  ]
+}

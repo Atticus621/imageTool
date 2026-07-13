@@ -1,0 +1,37 @@
+{
+  "id": "dl_viz/feature_map",
+  "name": "特征图",
+  "category": "可视化",
+  "description": "可视化卷积层特征图",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "model",
+      "type": "any",
+      "label": "模型"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "image",
+      "type": "any",
+      "label": "特征图"
+    }
+  ],
+  "params": [
+    {
+      "name": "layer_name",
+      "type": "text",
+      "label": "层名称",
+      "default": "layer1"
+    },
+    {
+      "name": "num_features",
+      "type": "int_slider",
+      "label": "显示数量",
+      "default": 16,
+      "min": 4,
+      "max": 64
+    }
+  ]
+}

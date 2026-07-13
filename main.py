@@ -18,7 +18,16 @@ _app.setApplicationVersion("0.1.0")
 
 from ui.widgets.splash import SplashScreen
 
-_splash = SplashScreen()
+# Load config early for splash screen
+from core.config import config
+_config_path = ROOT_DIR / "config" / "app.yaml"
+if _config_path.exists():
+    config.load(_config_path)
+
+_splash = SplashScreen(
+    app_name=config.get("app.name", "ImageTools"),
+    subtitle=config.get("ui.window_title", "图像处理蓝图工具")
+)
 _splash.show()
 _app.processEvents()  # force splash to render before heavy imports
 
@@ -147,6 +156,7 @@ def main():
         server = NetworkServer(
             host=config.get("network.host", "127.0.0.1"),
             port=config.get("network.port", 8765),
+            app_name=config.get("app.name", "ImageTools"),
         )
         server.start()
 

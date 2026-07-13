@@ -1,0 +1,31 @@
+{
+  "id": "dl_output/export_image",
+  "name": "导出图片",
+  "category": "输出",
+  "description": "将可视化结果导出为图片",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "image",
+      "type": "any",
+      "label": "输入图像"
+    }
+  ],
+  "outputs": [],
+  "params": [
+    {
+      "name": "output_path",
+      "type": "text",
+      "label": "输出路径",
+      "default": "output.png"
+    },
+    {
+      "name": "dpi",
+      "type": "int_slider",
+      "label": "DPI",
+      "default": 150,
+      "min": 72,
+      "max": 300
+    }
+  ]
+}

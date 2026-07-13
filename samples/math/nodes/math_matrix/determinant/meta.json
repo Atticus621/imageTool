@@ -1,0 +1,22 @@
+{
+  "id": "math_matrix/determinant",
+  "name": "行列式",
+  "category": "矩阵运算",
+  "description": "计算矩阵行列式",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "matrix",
+      "type": "matrix",
+      "label": "输入矩阵"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "行列式值"
+    }
+  ],
+  "params": []
+}

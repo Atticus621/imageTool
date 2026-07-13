@@ -57,6 +57,18 @@ class ImageDisplaySystem(ISystem, IImageDisplayProvider):
     def shutdown(self) -> None:
         self._current_display_info = None
 
+    # ------------------------------------------------------------------
+    # IResultDisplayProvider (generic interface methods)
+    # ------------------------------------------------------------------
+
+    def display_result(self, data) -> bool:
+        """Display result data. For image display, this is a no-op."""
+        return True
+
+    def clear(self):
+        """Clear the display."""
+        self._current_display_info = None
+
     def register_subsystems(self, registry: SystemRegistry) -> None:
         """Register subsystems."""
         self._ruler = RulerSystem(self)

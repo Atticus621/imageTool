@@ -1,0 +1,40 @@
+{
+  "shapes": [
+    {
+      "type": "rect",
+      "module": "shapes.rectangle",
+      "class": "RectangleShape",
+      "label": "Rectangle"
+    },
+    {
+      "type": "circle",
+      "module": "shapes.circle",
+      "class": "CircleShape",
+      "label": "Circle"
+    },
+    {
+      "type": "polygon",
+      "module": "shapes.polygon",
+      "class": "PolygonShape",
+      "label": "Polygon"
+    },
+    {
+      "type": "ellipse",
+      "module": "shapes.ellipse",
+      "class": "EllipseShape",
+      "label": "Ellipse"
+    },
+    {
+      "type": "sector",
+      "module": "shapes.sector",
+      "class": "SectorShape",
+      "label": "Sector"
+    },
+    {
+      "type": "capsule",
+      "module": "shapes.capsule",
+      "class": "CapsuleShape",
+      "label": "Capsule"
+    }
+  ]
+}

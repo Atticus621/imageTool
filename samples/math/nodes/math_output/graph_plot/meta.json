@@ -1,0 +1,53 @@
+{
+  "id": "math_output/graph_plot",
+  "name": "函数绘图",
+  "category": "输出",
+  "description": "绘制函数图像",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输入表达式"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "image",
+      "type": "any",
+      "label": "图像"
+    }
+  ],
+  "params": [
+    {
+      "name": "variable",
+      "type": "text",
+      "label": "自变量",
+      "default": "x"
+    },
+    {
+      "name": "x_min",
+      "type": "float_slider",
+      "label": "X 最小值",
+      "default": -10.0,
+      "min": -100.0,
+      "max": 100.0
+    },
+    {
+      "name": "x_max",
+      "type": "float_slider",
+      "label": "X 最大值",
+      "default": 10.0,
+      "min": -100.0,
+      "max": 100.0
+    },
+    {
+      "name": "num_points",
+      "type": "int_slider",
+      "label": "采样点数",
+      "default": 500,
+      "min": 100,
+      "max": 2000
+    }
+  ]
+}

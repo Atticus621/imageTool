@@ -1,0 +1,37 @@
+app:
+  name: "DeepLearningViz"
+  version: "0.1.0"
+
+paths:
+  nodes_dir: "nodes"
+  config_dir: "config"
+  logs_dir: "logs"
+
+logging:
+  level: "INFO"
+  max_file_size_mb: 5
+  backup_count: 3
+
+engine:
+  max_workers: 4
+  timeout_seconds: 300
+
+ui:
+  window_title: "DeepLearningViz - 深度学习可视化工具"
+  window_width: 1600
+  window_height: 900
+  left_panel_ratio: 0.55
+  right_panel_ratio: 0.45
+  theme: "dark_teal.xml"
+  extra:
+    danger: "#ff453a"
+    warning: "#ffb800"
+    success: "#34c759"
+    font_family: "Segoe UI"
+    font_size: "10px"
+    density_scale: "0"
+
+network:
+  host: "127.0.0.1"
+  port: 8765
+  enabled: true

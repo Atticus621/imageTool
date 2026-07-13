@@ -1,0 +1,35 @@
+{
+  "id": "dl_source/load_dataset",
+  "name": "加载数据集",
+  "category": "模型输入",
+  "description": "加载训练/测试数据集",
+  "version": "1.0.0",
+  "inputs": [],
+  "outputs": [
+    {
+      "name": "dataset",
+      "type": "any",
+      "label": "数据集"
+    }
+  ],
+  "params": [
+    {
+      "name": "dataset_path",
+      "type": "text",
+      "label": "数据集路径",
+      "default": ""
+    },
+    {
+      "name": "dataset_type",
+      "type": "combo",
+      "label": "数据集类型",
+      "default": "cifar10",
+      "options": [
+        {"value": "cifar10", "label": "CIFAR-10"},
+        {"value": "mnist", "label": "MNIST"},
+        {"value": "imagenet", "label": "ImageNet"},
+        {"value": "custom", "label": "自定义"}
+      ]
+    }
+  ]
+}

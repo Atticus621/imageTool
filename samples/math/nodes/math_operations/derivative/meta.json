@@ -1,0 +1,37 @@
+{
+  "id": "math_operations/derivative",
+  "name": "求导",
+  "category": "表达式运算",
+  "description": "对表达式求导",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输入表达式"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输出表达式"
+    }
+  ],
+  "params": [
+    {
+      "name": "variable",
+      "type": "text",
+      "label": "求导变量",
+      "default": "x"
+    },
+    {
+      "name": "order",
+      "type": "int_slider",
+      "label": "求导阶数",
+      "default": 1,
+      "min": 1,
+      "max": 10
+    }
+  ]
+}

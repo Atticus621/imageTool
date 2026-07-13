@@ -10,73 +10,60 @@ contracts. Concrete implementations may import framework types.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 # ------------------------------------------------------------------
-# Image display
+# Result display (generic — works for images, text, data, etc.)
 # ------------------------------------------------------------------
 
-class IImageDisplayProvider(ABC):
-    """Contract for converting images to displayable formats and
-    coordinate mapping.
+class IResultDisplayProvider(ABC):
+    """Contract for displaying execution results.
 
-    Implemented by ImageDisplaySystem. Consumed by ImageViewerWidget,
-    ImageSetWidget, and RulerSystem.
+    Generic interface that works with any data type.
+    Concrete implementations handle type-specific rendering.
+    """
+
+    @abstractmethod
+    def display_result(self, data: Any) -> bool:
+        """Display result data. Returns True if successful."""
+        ...
+
+    @abstractmethod
+    def clear(self):
+        """Clear the display."""
+        ...
+
+
+# ------------------------------------------------------------------
+# Image display (optional — for image-specific tools)
+# ------------------------------------------------------------------
+
+class IImageDisplayProvider(IResultDisplayProvider):
+    """Extended contract for image display with coordinate mapping.
+
+    Inherits from IResultDisplayProvider. Only implement this if your
+    tool needs image display with zoom/pan/coordinate features.
     """
 
     @abstractmethod
     def convert_to_qpixmap(self, img, max_size=None, color_space="bgr"):
-        """Convert a numpy image to a displayable pixmap.
-
-        Args:
-            img: numpy array image.
-            max_size: Optional max size constraint (framework-specific).
-            color_space: The color space of the input image (default "bgr").
-
-        Returns:
-            A framework-native pixmap object.
-        """
+        """Convert a numpy image to a displayable pixmap."""
         ...
 
     @abstractmethod
     def compute_display_info(self, img, max_width=400, max_height=280):
-        """Compute DisplayInfo for an image given display constraints.
-
-        Stores the result as the current display info for subsequent
-        coordinate mapping queries.
-
-        Args:
-            img: numpy array source image.
-            max_width: Maximum display width in logical pixels.
-            max_height: Maximum display height in logical pixels.
-
-        Returns:
-            DisplayInfo with actual and display dimensions.
-        """
+        """Compute display info for coordinate mapping."""
         ...
 
     @abstractmethod
     def get_current_display_info(self):
-        """Return the most recently computed DisplayInfo, or None.
-
-        Used by RulerSystem to access scale factors without re-computing.
-        """
+        """Return the most recently computed DisplayInfo, or None."""
         ...
 
     @abstractmethod
     def map_to_image(self, display_x: float, display_y: float):
-        """Map a display-pixmap coordinate to image pixel coordinates.
-
-        Uses the current DisplayInfo. Returns None if no image is
-        displayed or the coordinate is out of bounds.
-
-        Args:
-            display_x: X position within the displayed pixmap.
-            display_y: Y position within the displayed pixmap.
-
-        Returns:
-            (image_x, image_y) tuple of ints, or None.
-        """
+        """Map display coordinates to image pixel coordinates."""
         ...
 
 

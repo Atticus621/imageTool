@@ -1,0 +1,23 @@
+{
+  "id": "dl_output/export_html",
+  "name": "导出HTML",
+  "category": "输出",
+  "description": "将可视化结果导出为HTML报告",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "text",
+      "type": "string",
+      "label": "内容"
+    }
+  ],
+  "outputs": [],
+  "params": [
+    {
+      "name": "output_path",
+      "type": "text",
+      "label": "输出路径",
+      "default": "report.html"
+    }
+  ]
+}

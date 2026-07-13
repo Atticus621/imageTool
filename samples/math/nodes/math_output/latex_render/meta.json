@@ -1,0 +1,22 @@
+{
+  "id": "math_output/latex_render",
+  "name": "LaTeX 渲染",
+  "category": "输出",
+  "description": "将表达式渲染为 LaTeX 格式",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输入表达式"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "string",
+      "type": "string",
+      "label": "LaTeX 字符串"
+    }
+  ],
+  "params": []
+}

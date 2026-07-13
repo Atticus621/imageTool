@@ -1,0 +1,36 @@
+{
+  "id": "dl_source/load_model",
+  "name": "加载模型",
+  "category": "模型输入",
+  "description": "加载 PyTorch 模型",
+  "version": "1.0.0",
+  "inputs": [],
+  "outputs": [
+    {
+      "name": "model",
+      "type": "any",
+      "label": "模型"
+    }
+  ],
+  "params": [
+    {
+      "name": "model_path",
+      "type": "text",
+      "label": "模型路径",
+      "default": ""
+    },
+    {
+      "name": "model_type",
+      "type": "combo",
+      "label": "模型类型",
+      "default": "resnet18",
+      "options": [
+        {"value": "resnet18", "label": "ResNet18"},
+        {"value": "resnet50", "label": "ResNet50"},
+        {"value": "vgg16", "label": "VGG16"},
+        {"value": "mobilenet", "label": "MobileNet"},
+        {"value": "custom", "label": "自定义"}
+      ]
+    }
+  ]
+}

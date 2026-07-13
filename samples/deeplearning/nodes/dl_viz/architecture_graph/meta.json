@@ -1,0 +1,22 @@
+{
+  "id": "dl_viz/architecture_graph",
+  "name": "架构图",
+  "category": "可视化",
+  "description": "绘制模型架构图",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "model",
+      "type": "any",
+      "label": "模型"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "text",
+      "type": "string",
+      "label": "架构描述"
+    }
+  ],
+  "params": []
+}

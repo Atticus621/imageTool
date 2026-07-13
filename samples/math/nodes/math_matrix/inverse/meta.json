@@ -1,0 +1,22 @@
+{
+  "id": "math_matrix/inverse",
+  "name": "逆矩阵",
+  "category": "矩阵运算",
+  "description": "计算矩阵的逆",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "matrix",
+      "type": "matrix",
+      "label": "输入矩阵"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "matrix",
+      "type": "matrix",
+      "label": "逆矩阵"
+    }
+  ],
+  "params": []
+}

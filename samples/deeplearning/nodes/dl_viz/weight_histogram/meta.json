@@ -1,0 +1,31 @@
+{
+  "id": "dl_viz/weight_histogram",
+  "name": "权重直方图",
+  "category": "可视化",
+  "description": "绘制权重分布直方图",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "model",
+      "type": "any",
+      "label": "模型"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "image",
+      "type": "any",
+      "label": "直方图"
+    }
+  ],
+  "params": [
+    {
+      "name": "num_bins",
+      "type": "int_slider",
+      "label": "直方图 bins",
+      "default": 50,
+      "min": 10,
+      "max": 200
+    }
+  ]
+}

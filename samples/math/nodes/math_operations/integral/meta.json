@@ -1,0 +1,41 @@
+{
+  "id": "math_operations/integral",
+  "name": "积分",
+  "category": "表达式运算",
+  "description": "对表达式积分",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输入表达式"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "expression",
+      "type": "expression",
+      "label": "输出表达式"
+    }
+  ],
+  "params": [
+    {
+      "name": "variable",
+      "type": "text",
+      "label": "积分变量",
+      "default": "x"
+    },
+    {
+      "name": "lower_bound",
+      "type": "text",
+      "label": "下限 (留空为不定积分)",
+      "default": ""
+    },
+    {
+      "name": "upper_bound",
+      "type": "text",
+      "label": "上限 (留空为不定积分)",
+      "default": ""
+    }
+  ]
+}

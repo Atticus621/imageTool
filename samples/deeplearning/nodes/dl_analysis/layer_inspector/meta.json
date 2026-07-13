@@ -1,0 +1,29 @@
+{
+  "id": "dl_analysis/layer_inspector",
+  "name": "层检查器",
+  "category": "模型分析",
+  "description": "检查指定层的详细信息",
+  "version": "1.0.0",
+  "inputs": [
+    {
+      "name": "model",
+      "type": "any",
+      "label": "模型"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "text",
+      "type": "string",
+      "label": "层信息"
+    }
+  ],
+  "params": [
+    {
+      "name": "layer_name",
+      "type": "text",
+      "label": "层名称",
+      "default": "layer1"
+    }
+  ]
+}

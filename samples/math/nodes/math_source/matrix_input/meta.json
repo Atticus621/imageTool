@@ -1,0 +1,39 @@
+{
+  "id": "math_source/matrix_input",
+  "name": "矩阵输入",
+  "category": "公式输入",
+  "description": "输入矩阵",
+  "version": "1.0.0",
+  "inputs": [],
+  "outputs": [
+    {
+      "name": "matrix",
+      "type": "matrix",
+      "label": "矩阵"
+    }
+  ],
+  "params": [
+    {
+      "name": "matrix_text",
+      "type": "text",
+      "label": "矩阵 (行用;分隔，列用,分隔)",
+      "default": "1,2;3,4"
+    },
+    {
+      "name": "rows",
+      "type": "int_slider",
+      "label": "行数",
+      "default": 2,
+      "min": 1,
+      "max": 10
+    },
+    {
+      "name": "cols",
+      "type": "int_slider",
+      "label": "列数",
+      "default": 2,
+      "min": 1,
+      "max": 10
+    }
+  ]
+}
