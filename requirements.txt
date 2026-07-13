@@ -10,3 +10,8 @@ qt-material
 fastapi>=0.100.0
 uvicorn>=0.24.0
 simpleeval>=1.0.0
+pyzbar>=0.1.9
+# Optional OCR engines (install as needed):
+# paddleocr>=2.7.0 + paddlepaddle
+# pytesseract>=0.3.10 (+ tesseract-ocr system dependency)
+# easyocr>=1.7.0

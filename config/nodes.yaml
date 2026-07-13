@@ -63,6 +63,10 @@ categories:
         order: 5
       - id: "detection/ai/yolo_detect"
         order: 6
+      - id: "detection/ocr/text_detect"
+        order: 7
+      - id: "detection/qrcode/qr_detect"
+        order: 8
 
   - key: "变量"
     name: "变量"

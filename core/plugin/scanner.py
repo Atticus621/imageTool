@@ -122,7 +122,13 @@ class PluginScanner:
 
     @staticmethod
     def _find_node_class(module) -> type | None:
-        """Find a NodeBase subclass in a module (not NodeBase itself)."""
+        """Find a NodeBase subclass in a module (not NodeBase itself).
+
+        Prefers classes with a non-empty NODE_ID (concrete node classes)
+        over base/abstract classes that may appear in the module namespace
+        due to Python's import system adding already-loaded modules.
+        """
+        fallback = None
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
             if (
@@ -131,8 +137,11 @@ class PluginScanner:
                 and attr is not NodeBase
                 and hasattr(attr, "execute")
             ):
-                return attr
-        return None
+                if getattr(attr, "NODE_ID", ""):
+                    return attr
+                if fallback is None:
+                    fallback = attr
+        return fallback
 
     # ── Backward compat: ensure __init__.py exist ──────────────────────
 
