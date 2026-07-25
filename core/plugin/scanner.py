@@ -93,7 +93,7 @@ class PluginScanner:
             return
 
         node_registry.register_lazy(meta, node_py)
-        logger.info(f"Registered (class): {meta.id} ({meta.name}) in {meta.category}")
+        logger.info(f"Registered (class): {meta.id} ({meta.name})")
 
     # ── Direct module import (no __init__.py needed) ───────────────────
 

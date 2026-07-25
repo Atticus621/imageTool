@@ -5,7 +5,7 @@ NodeMeta, with optional port checkboxes and dependency wiring.
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QGridLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QLabel,
     QFileDialog, QCheckBox,
 )
 
@@ -45,7 +45,7 @@ class NodeParamPanel(QWidget):
         self._target_node = node
 
     def show_params(self, meta):
-        """Render all parameter groups for the given NodeMeta."""
+        """Render all parameter groups for the given NodeMeta as tabs."""
         self._clear()
 
         if meta is None:
@@ -56,22 +56,44 @@ class NodeParamPanel(QWidget):
         info_label.setStyleSheet(f"color: {TEXT_PRIMARY};")
         self._layout.addWidget(info_label)
 
-        # Input ports group
-        self._add_port_group("输入参数", meta,
-                             [p for p in meta.optional_ports if p.direction == "input"],
-                             "无可配置输入端口")
-        # Output ports group
-        self._add_port_group("输出参数", meta,
-                             [p for p in meta.optional_ports if p.direction == "output"],
-                             "无可配置输出端口")
+        tabs = QTabWidget()
+        tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #3a3b55;
+                background: #222338;
+            }
+            QTabBar::tab {
+                background: #2a2b40;
+                color: #9898b0;
+                padding: 4px 12px;
+                margin-right: 1px;
+                font-size: 11px;
+            }
+            QTabBar::tab:selected {
+                background: #32334a;
+                color: #e8e8f0;
+            }
+            QTabBar::tab:hover {
+                background: #3a3b55;
+            }
+        """)
 
-        # Function parameters
+        # Tab 1: Input ports
+        input_opcs = [p for p in meta.optional_ports if p.direction == "input"]
+        tabs.addTab(self._make_port_page(input_opcs, "无可配置输入端口"), "输入参数")
+
+        # Tab 2: Function parameters
         if meta.params:
-            self._add_params_group(meta)
+            tabs.addTab(self._make_params_page(meta), "函数参数")
 
-        # Advanced group (placeholder)
-        self._add_port_group("高级参数", meta, [], "暂无高级参数")
+        # Tab 3: Output ports
+        output_opcs = [p for p in meta.optional_ports if p.direction == "output"]
+        tabs.addTab(self._make_port_page(output_opcs, "无可配置输出端口"), "输出参数")
 
+        # Tab 4: Advanced (placeholder)
+        tabs.addTab(self._make_port_page([], "暂无高级参数"), "高级参数")
+
+        self._layout.addWidget(tabs)
         self._layout.addStretch()
 
     def get_param_values(self) -> dict:
@@ -109,9 +131,11 @@ class NodeParamPanel(QWidget):
         self._param_widgets.clear()
         self._optional_port_checkboxes.clear()
 
-    def _add_port_group(self, title, meta, opcs, empty_text):
-        group = CollapsibleGroupBox(title)
-        layout = QVBoxLayout(group)
+    def _make_port_page(self, opcs, empty_text):
+        """Create a page widget for optional port checkboxes."""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 8, 8, 8)
         if opcs:
             for opc in opcs:
                 self._add_optional_port_checkbox(opc, layout)
@@ -119,8 +143,23 @@ class NodeParamPanel(QWidget):
             lbl = QLabel(empty_text)
             lbl.setStyleSheet(f"color: {TEXT_MUTED};")
             layout.addWidget(lbl)
+        layout.addStretch()
+        return page
+
+    def _make_params_group(self, meta):
+        """Create a group widget for function parameters."""
+        group = CollapsibleGroupBox("函数参数")
+        group.setChecked(True)
+        grid = QGridLayout(group)
+        row = 0
+        for param in meta.params:
+            if not param.depends_on:
+                row = self._add_param_row(param, grid, row)
+        for param in meta.params:
+            if param.depends_on:
+                row = self._add_param_row(param, grid, row)
         group.finalize()
-        self._layout.addWidget(group)
+        return group
 
     def _add_optional_port_checkbox(self, opc, layout):
         current = opc.default
@@ -132,20 +171,16 @@ class NodeParamPanel(QWidget):
         layout.addWidget(checkbox)
         self._optional_port_checkboxes[opc.name] = checkbox
 
-    def _add_params_group(self, meta):
-        group = CollapsibleGroupBox("函数参数")
-        group.setChecked(True)  # expanded by default
-        grid = QGridLayout(group)
-        row = 0
-        for param in meta.params:
-            if not param.depends_on:
-                row = self._add_param_row(param, grid, row)
-        for param in meta.params:
-            if param.depends_on:
-                row = self._add_param_row(param, grid, row)
-        group.finalize()
-        self._layout.addWidget(group)
+    def _make_params_page(self, meta):
+        """Create a page widget for function parameters."""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 8, 8, 8)
+        group = self._make_params_group(meta)
+        layout.addWidget(group)
+        layout.addStretch()
         self._wire_dependencies(meta)
+        return page
 
     def _add_param_row(self, param, layout, row):
         handler = self._build_handler(param)

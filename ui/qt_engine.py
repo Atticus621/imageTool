@@ -35,13 +35,22 @@ class QtExecutionWorker(QObject):
         self._pure.cancel()
 
     def run(self):
-        """Run worker, bridging EventEmitter → Qt Signal."""
+        """Run worker in batch mode, bridging EventEmitter → Qt Signal."""
+        self._connect_events()
+        self._pure.run()
+
+    def run_streaming(self):
+        """Run worker in streaming mode, bridging EventEmitter → Qt Signal."""
+        self._connect_events()
+        self._pure.run_streaming()
+
+    def _connect_events(self):
+        """Connect pure worker events to Qt signals."""
         self._pure.on_progress.connect(lambda c, t: self.progress.emit(c, t))
         self._pure.on_node_started.connect(lambda n: self.node_started.emit(n))
         self._pure.on_node_finished.connect(lambda n, s: self.node_finished.emit(n, s))
         self._pure.on_image_output.connect(lambda e: self.image_output.emit(e))
         self._pure.on_all_finished.connect(lambda r: self.all_finished.emit(r))
-        self._pure.run()
 
 
 class QtExecutionEngine(QObject):
@@ -61,6 +70,11 @@ class QtExecutionEngine(QObject):
         super().__init__(parent)
         self._thread: QThread | None = None
         self._worker: QtExecutionWorker | None = None
+        self._streaming_mode = False
+
+    def set_streaming_mode(self, enabled: bool):
+        """Toggle streaming mode on the underlying engine."""
+        self._streaming_mode = enabled
 
     def execute(self, graph):
         if self._thread and self._thread.isRunning():
@@ -87,7 +101,7 @@ class QtExecutionEngine(QObject):
             info = gn.to_pipeline_info()
             node_infos[gn] = info
 
-            exec_node = node_registry.create_node(node_id)
+            exec_node = node_registry.create_exec_node(node_id)
             if exec_node:
                 exec_nodes[gn] = exec_node
                 exec_node.set_state(NodeState.RUNNING)
@@ -99,7 +113,8 @@ class QtExecutionEngine(QObject):
         self._worker = QtExecutionWorker(sorted_nodes, node_infos)
         self._worker.moveToThread(self._thread)
 
-        self._thread.started.connect(self._worker.run)
+        target = self._worker.run_streaming if self._streaming_mode else self._worker.run
+        self._thread.started.connect(target)
         self._worker.progress.connect(self.progress_updated)
         self._worker.node_finished.connect(self._on_worker_node_finished)
         self._worker.image_output.connect(self.image_output)

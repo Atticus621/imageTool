@@ -15,8 +15,6 @@ class ResizeCropNode(NodeBase):
 
     NODE_ID = "processing/transform/resize_crop"
     NODE_NAME = "缩放裁剪"
-    NODE_CATEGORY = "图像处理"
-    NODE_SUBCATEGORY = "预处理"
     NODE_DESCRIPTION = "图像缩放、裁剪、旋转"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},

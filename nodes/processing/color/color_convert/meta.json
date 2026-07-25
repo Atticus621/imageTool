@@ -1,8 +1,6 @@
 {
     "id": "processing/color/color_convert",
     "name": "颜色空间转换",
-    "category": "图像处理",
-    "subcategory": "颜色",
     "description": "在BGR、RGB、HSV、HLS、LAB、LUV、GRAY、XYZ、YCrCb等颜色空间之间转化",
     "version": "1.0.0",
     "inputs": [
@@ -26,15 +24,42 @@
             "label": "目标颜色空间",
             "default": "bgr",
             "options": [
-                {"value": "bgr", "label": "BGR (OpenCV 默认)"},
-                {"value": "rgb", "label": "RGB"},
-                {"value": "hsv", "label": "HSV"},
-                {"value": "hls", "label": "HLS"},
-                {"value": "lab", "label": "LAB"},
-                {"value": "luv", "label": "LUV"},
-                {"value": "gray", "label": "GRAY (灰度)"},
-                {"value": "xyz", "label": "XYZ"},
-                {"value": "ycr_cb", "label": "YCrCb"}
+                {
+                    "value": "bgr",
+                    "label": "BGR (OpenCV 默认)"
+                },
+                {
+                    "value": "rgb",
+                    "label": "RGB"
+                },
+                {
+                    "value": "hsv",
+                    "label": "HSV"
+                },
+                {
+                    "value": "hls",
+                    "label": "HLS"
+                },
+                {
+                    "value": "lab",
+                    "label": "LAB"
+                },
+                {
+                    "value": "luv",
+                    "label": "LUV"
+                },
+                {
+                    "value": "gray",
+                    "label": "GRAY (灰度)"
+                },
+                {
+                    "value": "xyz",
+                    "label": "XYZ"
+                },
+                {
+                    "value": "ycr_cb",
+                    "label": "YCrCb"
+                }
             ]
         }
     ]

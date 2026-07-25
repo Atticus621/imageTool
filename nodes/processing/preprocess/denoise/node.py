@@ -15,7 +15,6 @@ class DenoiseNode(NodeBase):
 
     NODE_ID = "processing/preprocess/denoise"
     NODE_NAME = "降噪"
-    NODE_CATEGORY = "图像预处理"
     NODE_DESCRIPTION = "图像降噪：高斯模糊、中值滤波、双边滤波"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},

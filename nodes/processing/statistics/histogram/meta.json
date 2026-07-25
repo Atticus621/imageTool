@@ -1,0 +1,11 @@
+{
+    "id": "processing/statistics/histogram",
+    "name": "直方图统计",
+    "description": "计算图像各通道直方图并输出可视化结果，支持 LAB/HSV 等颜色空间",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [],
+    "outputs": [],
+    "optional_ports": [],
+    "params": []
+}

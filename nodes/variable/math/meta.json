@@ -1,0 +1,11 @@
+{
+    "id": "variable/math",
+    "name": "表达式计算",
+    "description": "计算数学表达式，支持引用全局变量",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [],
+    "outputs": [],
+    "optional_ports": [],
+    "params": []
+}

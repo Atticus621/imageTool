@@ -15,7 +15,6 @@ class EdgeDetectNode(NodeBase):
 
     NODE_ID = "detection/edge/edge_detect"
     NODE_NAME = "边缘检测"
-    NODE_CATEGORY = "检测"
     NODE_DESCRIPTION = "图像边缘检测：Canny、Sobel、Laplacian"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},

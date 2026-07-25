@@ -1,15 +1,21 @@
 {
     "id": "processing/brightness/brightness",
     "name": "亮度对比度",
-    "category": "图像处理",
-    "subcategory": "预处理",
     "description": "调整图像亮度、对比度，支持CLAHE自适应均衡化",
     "version": "1.0.0",
     "inputs": [
-        {"name": "images", "type": "image", "label": "图像输入"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输入"
+        }
     ],
     "outputs": [
-        {"name": "images", "type": "image", "label": "图像输出"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输出"
+        }
     ],
     "params": [
         {
@@ -34,8 +40,7 @@
             "name": "clahe",
             "type": "checkbox",
             "label": "CLAHE",
-            "default": false,
-            "pinned": true
+            "default": false
         },
         {
             "name": "clahe_clip",

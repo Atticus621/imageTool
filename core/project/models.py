@@ -199,6 +199,27 @@ class ExecutionConfig:
 
 
 @dataclass
+class DisplayData:
+    """Serialized display configuration."""
+
+    displays: dict[str, str] = field(default_factory=dict)  # display_id -> display_name
+    node_displays: dict[str, str] = field(default_factory=dict)  # node_name -> display_id
+
+    def to_dict(self) -> dict:
+        return {
+            "displays": dict(self.displays),
+            "node_displays": dict(self.node_displays),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> DisplayData:
+        return cls(
+            displays=data.get("displays", {}),
+            node_displays=data.get("node_displays", {}),
+        )
+
+
+@dataclass
 class ProjectData:
     """Top-level project data container."""
 
@@ -208,6 +229,7 @@ class ProjectData:
     connections: list[ConnectionData] = field(default_factory=list)
     rois: list[ROISerializedData] = field(default_factory=list)
     execution_config: ExecutionConfig = field(default_factory=ExecutionConfig)
+    display_config: DisplayData = field(default_factory=DisplayData)
 
     def to_dict(self) -> dict:
         return {
@@ -217,6 +239,7 @@ class ProjectData:
             "connections": [c.to_dict() for c in self.connections],
             "rois": [r.to_dict() for r in self.rois],
             "execution_config": self.execution_config.to_dict(),
+            "display_config": self.display_config.to_dict(),
         }
 
     @classmethod
@@ -228,4 +251,5 @@ class ProjectData:
             connections=[ConnectionData.from_dict(c) for c in data.get("connections", [])],
             rois=[ROISerializedData.from_dict(r) for r in data.get("rois", [])],
             execution_config=ExecutionConfig.from_dict(data.get("execution_config", {})),
+            display_config=DisplayData.from_dict(data.get("display_config", {})),
         )

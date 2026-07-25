@@ -16,7 +16,6 @@ class CentroidNode(NodeBase):
 
     NODE_ID = "detection/location/centroid"
     NODE_NAME = "质心定位"
-    NODE_CATEGORY = "检测"
     NODE_DESCRIPTION = "通过轮廓矩计算物体质心位置"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},
@@ -29,7 +28,7 @@ class CentroidNode(NodeBase):
         {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": False, "group": "input"},
     ]
     NODE_PARAMS = [
-        {"name": "min_area", "type": "int_slider", "label": "最小面积", "default": 500, "min": 10, "max": 10000, "step": 10, "pinned": True},
+        {"name": "min_area", "type": "int_slider", "label": "最小面积", "default": 500, "min": 10, "max": 10000, "step": 10},
         {"name": "draw_cross", "type": "checkbox", "label": "绘制十字标记", "default": True},
         {"name": "draw_label", "type": "checkbox", "label": "绘制坐标文字", "default": True},
     ]

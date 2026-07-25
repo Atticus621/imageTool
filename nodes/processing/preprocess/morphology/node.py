@@ -21,8 +21,6 @@ class MorphologyNode(NodeBase):
     # ── Node metadata (no meta.json needed) ─────────────────────────
     NODE_ID = "processing/preprocess/morphology"
     NODE_NAME = "形态学操作"
-    NODE_CATEGORY = "图像处理"
-    NODE_SUBCATEGORY = "预处理"
     NODE_DESCRIPTION = "对图像进行形态学操作：腐蚀、膨胀、开运算、闭运算、形态学梯度、顶帽、黑帽"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},
@@ -35,7 +33,7 @@ class MorphologyNode(NodeBase):
     ]
     NODE_PARAMS = [
         {
-            "name": "operation", "type": "combo", "label": "操作类型", "default": "open", "pinned": True,
+            "name": "operation", "type": "combo", "label": "操作类型", "default": "open",
             "options": [
                 {"value": "erode",     "label": "腐蚀 (Erosion)"},
                 {"value": "dilate",    "label": "膨胀 (Dilation)"},

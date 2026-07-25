@@ -18,6 +18,7 @@ from core.logger import logger
 from core.project import (
     AutoSaveManager,
     ConnectionData,
+    DisplayData,
     NodeData,
     ProjectData,
     ProjectMetadata,
@@ -81,6 +82,7 @@ class ProjectSystem(ISystem):
 
         # Graph reference (set during wire())
         self._graph_getter: Callable[[], "NodeGraph"] | None = None
+        self._display_manager = None  # DisplayWindowManager instance (set externally)
 
     # ------------------------------------------------------------------
     # ISystem
@@ -119,6 +121,14 @@ class ProjectSystem(ISystem):
         self._autosave.set_data_provider(self._collect_project_data)
 
         logger.info("[ProjectSystem] Wired")
+
+    def set_display_manager(self, display_manager) -> None:
+        """Set the DisplayWindowManager for display persistence.
+
+        Args:
+            display_manager: DisplayWindowManager instance.
+        """
+        self._display_manager = display_manager
 
     # ------------------------------------------------------------------
     # Project operations
@@ -454,6 +464,14 @@ class ProjectSystem(ISystem):
 
         self._current_project.nodes = nodes
         self._current_project.connections = connections
+
+        # Collect display config
+        if self._display_manager is not None:
+            self._current_project.display_config = DisplayData(
+                displays=self._display_manager.get_displays(),
+                node_displays=dict(self._display_manager._node_displays),
+            )
+
         logger.info(f"[ProjectSystem] Collected {len(nodes)} nodes, {len(connections)} connections")
 
     def _apply_project_to_graph(self, project: ProjectData) -> None:
@@ -545,6 +563,16 @@ class ProjectSystem(ISystem):
                     from_port.connect_to(to_port, push_undo=False)
                 except Exception as e:
                     logger.warning(f"[ProjectSystem] Connection failed: {e}")
+
+        # Restore display config
+        if self._display_manager is not None and project.display_config:
+            display_data = project.display_config
+            self._display_manager._displays = dict(display_data.displays)
+            self._display_manager._node_displays = dict(display_data.node_displays)
+            logger.info(
+                f"[ProjectSystem] Restored {len(display_data.displays)} displays, "
+                f"{len(display_data.node_displays)} node associations"
+            )
 
         logger.info(
             f"[ProjectSystem] Applied project: {len(project.nodes)} nodes, "

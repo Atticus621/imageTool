@@ -45,6 +45,8 @@ class NodeRegistry:
         self._lazy_paths: dict[str, Path] = {}
         self._categories: dict[str, list[str]] = {}
         self._tree_config: list[dict] = []
+        # Single source of truth: node_id -> (category, subcategory) from yaml
+        self._node_categories: dict[str, tuple[str, str]] = {}
 
     def load_tree_config(self, path: str | Path):
         path = Path(path)
@@ -62,7 +64,11 @@ class NodeRegistry:
         if node_class is not None:
             self._classes_by_id[meta.id] = node_class
 
-        key = "/".join(meta.category_path) or "_unclassified"
+        cat_info = self._node_categories.get(meta.id)
+        if cat_info:
+            key = "/".join(cat_info)
+        else:
+            key = "_unclassified"
 
         if key not in self._categories:
             self._categories[key] = []
@@ -75,7 +81,11 @@ class NodeRegistry:
         self._meta_by_id[meta.id] = meta
         self._lazy_paths[meta.id] = node_py_path
 
-        key = "/".join(meta.category_path) or "_unclassified"
+        cat_info = self._node_categories.get(meta.id)
+        if cat_info:
+            key = "/".join(cat_info)
+        else:
+            key = "_unclassified"
 
         if key not in self._categories:
             self._categories[key] = []
@@ -92,6 +102,20 @@ class NodeRegistry:
         if cls is None and node_id in self._lazy_paths:
             cls = self._load_class_lazy(node_id)
         return cls
+
+    def get_category(self, node_id: str) -> str:
+        """Get the top-level category for a node from yaml config."""
+        cat_info = self._node_categories.get(node_id)
+        return cat_info[0] if cat_info else ""
+
+    def get_subcategory(self, node_id: str) -> str:
+        """Get the subcategory for a node from yaml config."""
+        cat_info = self._node_categories.get(node_id)
+        return cat_info[1] if cat_info and len(cat_info) > 1 else ""
+
+    def same_category(self, node_id_a: str, node_id_b: str) -> bool:
+        """Check if two nodes belong to the same top-level category."""
+        return self.get_category(node_id_a) == self.get_category(node_id_b)
 
     def _load_class_lazy(self, node_id: str) -> type | None:
         py_path = self._lazy_paths.pop(node_id)
@@ -131,7 +155,12 @@ class NodeRegistry:
             logger.error(f"Failed to lazy load {node_id}: {e}")
             return None
 
-    def create_node(self, node_id: str, instance_id: str = None) -> "NodeBase | None":
+    def create_exec_node(self, node_id: str, instance_id: str = None) -> "NodeBase | None":
+        """创建执行节点实例（用于 pipeline 执行）。
+
+        注意：这创建的是用于执行的 NodeBase 实例，不是画布上的图节点。
+        图节点创建请使用 NodeFactory.create_graph_node()。
+        """
         meta = self.get_meta(node_id)
         cls = self.get_class(node_id)
         if meta is None:
@@ -149,7 +178,7 @@ class NodeRegistry:
         return dict(self._categories)
 
     def get_category_tree(self) -> dict[str, CategoryNode]:
-        """Return category tree with explicit type contract.
+        """Return category tree built entirely from nodes.yaml.
 
         Returns:
             dict[str, CategoryNode]: Top-level categories keyed by name.
@@ -158,74 +187,30 @@ class NodeRegistry:
         if self._tree_config:
             tree = self._build_tree_from_config()
         else:
-            tree = self._build_tree_from_meta()
-
-        # Validate meta consistency with yaml config
-        if self._tree_config:
-            self._validate_meta_consistency()
+            # No yaml — put everything in "未分类"
+            tree = {"未分类": CategoryNode(items=list(self._meta_by_id.values()))}
 
         return tree
 
-    def _validate_meta_consistency(self):
-        """Validate that meta.json categories match nodes.yaml structure.
-
-        Logs warnings for mismatches but does not block startup.
-        """
-        # Collect all node IDs and their expected (category, subcategory) from yaml
-        yaml_locations: dict[str, tuple[str, str]] = {}
-
-        def _collect_locations(cfg: dict, parent_category: str, parent_subcategory: str = ""):
-            key = cfg.get("key", "")
-            name = cfg.get("name", key)
-            current_category = parent_category or name
-            current_subcategory = parent_subcategory
-
-            # Nodes at this level
-            for n in cfg.get("nodes", []):
-                nid = n["id"]
-                yaml_locations[nid] = (current_category, current_subcategory)
-
-            # Recurse into subcategories
-            for sub_cfg in cfg.get("subcategories", []):
-                sub_name = sub_cfg.get("name", sub_cfg.get("key", ""))
-                _collect_locations(sub_cfg, current_category, sub_name)
-
-        for cat_cfg in self._tree_config:
-            _collect_locations(cat_cfg, "")
-
-        # Check each registered node against yaml
-        for meta in self._meta_by_id.values():
-            if meta.id not in yaml_locations:
-                continue
-            yaml_cat, yaml_sub = yaml_locations[meta.id]
-            meta_cat = meta.category or ""
-            meta_sub = meta.subcategory or ""
-
-            if meta_cat != yaml_cat or meta_sub != yaml_sub:
-                logger.warning(
-                    f"Category mismatch for '{meta.id}': "
-                    f"yaml=({yaml_cat}, {yaml_sub}), "
-                    f"meta=({meta_cat}, {meta_sub})"
-                )
-
     def _build_tree_from_config(self) -> dict[str, CategoryNode]:
+        """Build category tree from nodes.yaml. yaml is the single source of truth."""
         tree: dict[str, CategoryNode] = {}
         yaml_node_ids: set[str] = set()
+
+        # Build node_id → (category, subcategory) mapping from yaml
+        self._collect_category_mapping()
 
         for cat_cfg in self._tree_config:
             self._parse_config_node(cat_cfg, tree, yaml_node_ids)
 
-        # Append any registered nodes NOT in yaml to their category path
+        # Warn about registered nodes not in yaml
         for meta in self._meta_by_id.values():
-            if meta.id in yaml_node_ids:
-                continue
-            path = meta.category_path or ["_unclassified"]
-            current = tree
-            for i, segment in enumerate(path):
-                if i == len(path) - 1:
-                    current.setdefault(segment, CategoryNode()).items.append(meta)
-                else:
-                    current = current.setdefault(segment, CategoryNode()).subcategories
+            if meta.id not in yaml_node_ids:
+                logger.warning(
+                    f"Node '{meta.id}' ({meta.name}) not found in nodes.yaml — "
+                    f"will appear in '未分类'"
+                )
+                tree.setdefault("未分类", CategoryNode()).items.append(meta)
 
         return tree
 
@@ -239,6 +224,8 @@ class NodeRegistry:
         for n in cfg.get("nodes", []):
             nid = n["id"]
             yaml_node_ids.add(nid)
+            # Store category mapping (top-level category is the outermost key)
+            # We need to find the top-level category, which is the first key in the path
             meta = self._meta_by_id.get(nid)
             if meta:
                 target.items.append(meta)
@@ -247,17 +234,24 @@ class NodeRegistry:
         for sub_cfg in cfg.get("subcategories", []):
             self._parse_config_node(sub_cfg, target.subcategories, yaml_node_ids)
 
-    def _build_tree_from_meta(self) -> dict[str, CategoryNode]:
-        tree: dict[str, CategoryNode] = {}
-        for meta in self._meta_by_id.values():
-            path = meta.category_path or ["_unclassified"]
-            current = tree
-            for i, segment in enumerate(path):
-                if i == len(path) - 1:
-                    current.setdefault(segment, CategoryNode()).items.append(meta)
-                else:
-                    current = current.setdefault(segment, CategoryNode()).subcategories
-        return tree
+    def _collect_category_mapping(self):
+        """Extract node_id → (category, subcategory) from _tree_config."""
+        self._node_categories.clear()
+
+        def _walk(cfg: dict, top_category: str, subcategory: str = ""):
+            name = cfg.get("name", cfg.get("key", ""))
+            current_top = top_category or name
+
+            for n in cfg.get("nodes", []):
+                nid = n["id"]
+                self._node_categories[nid] = (current_top, subcategory)
+
+            for sub_cfg in cfg.get("subcategories", []):
+                sub_name = sub_cfg.get("name", sub_cfg.get("key", ""))
+                _walk(sub_cfg, current_top, sub_name)
+
+        for cat_cfg in self._tree_config:
+            _walk(cat_cfg, "")
 
     def __len__(self):
         return len(self._meta_by_id)

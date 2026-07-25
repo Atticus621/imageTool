@@ -7,6 +7,37 @@ sys.path.insert(0, str(ROOT_DIR))
 
 os.environ["QT_API"] = "pyside6"
 
+# ── Tune NodeGraphQt zoom limits ─────────────────────────────────────
+# Default ZOOM_MIN=-0.95 allows zooming out to 5%, which makes node
+# text unreadable.  Raise the floor so text stays visible.
+import NodeGraphQt.widgets.viewer as _ngq_viewer
+
+_ngq_viewer.ZOOM_MIN = -0.85  # floor at 15% instead of 5%
+
+# ── Hide port text labels when zoomed out ────────────────────────────
+# Port text disappears before the node title, keeping titles readable
+# at moderate zoom-out levels.
+_ORIG_SET_ZOOM = _ngq_viewer.NodeViewer._set_viewer_zoom
+_PORT_TEXT_HIDE_ZOOM = -0.25  # hide port text below ~75% zoom
+
+
+def _patched_set_zoom(self, value, sensitivity=None, pos=None):
+    _ORIG_SET_ZOOM(self, value, sensitivity, pos)
+    zoom = self.get_zoom()
+    show_port_text = zoom > _PORT_TEXT_HIDE_ZOOM
+    for node in self.scene().items():
+        if not hasattr(node, '_input_items'):
+            continue
+        for text in node._input_items.values():
+            if text.isVisible() != show_port_text:
+                text.setVisible(show_port_text)
+        for text in node._output_items.values():
+            if text.isVisible() != show_port_text:
+                text.setVisible(show_port_text)
+
+
+_ngq_viewer.NodeViewer._set_viewer_zoom = _patched_set_zoom
+
 # ── QApplication + SplashScreen FIRST — before even the logger ──────
 # This ensures the user sees the splash window immediately on launch,
 # before any module loading or logging setup.

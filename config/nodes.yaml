@@ -32,7 +32,7 @@ categories:
         nodes:
           - id: "processing/color/color_convert"
             order: 1
-          - id: "processing/color/color_filter"
+          - id: "processing/color_conversion/color_filter"
             order: 2
       - key: "运算"
         name: "运算"
@@ -50,23 +50,39 @@ categories:
   - key: "检测"
     name: "检测"
     order: 3
-    nodes:
-      - id: "detection/contour/contour_detect"
+    subcategories:
+      - key: "形状检测"
+        name: "形状检测"
         order: 1
-      - id: "detection/shape/circle_detect"
+        nodes:
+          - id: "detection/shape/circle_detect"
+            order: 1
+          - id: "detection/shape/rect_detect"
+            order: 2
+      - key: "轮廓与边缘"
+        name: "轮廓与边缘"
         order: 2
-      - id: "detection/shape/rect_detect"
+        nodes:
+          - id: "detection/contour/contour_detect"
+            order: 1
+          - id: "detection/edge/edge_detect"
+            order: 2
+      - key: "定位"
+        name: "定位"
         order: 3
-      - id: "detection/edge/edge_detect"
+        nodes:
+          - id: "detection/location/centroid"
+            order: 1
+      - key: "智能检测"
+        name: "智能检测"
         order: 4
-      - id: "detection/location/centroid"
-        order: 5
-      - id: "detection/ai/yolo_detect"
-        order: 6
-      - id: "detection/ocr/text_detect"
-        order: 7
-      - id: "detection/qrcode/qr_detect"
-        order: 8
+        nodes:
+          - id: "detection/yolo/yolo_detect"
+            order: 1
+          - id: "detection/ocr/text_detect"
+            order: 2
+          - id: "detection/qrcode/qr_detect"
+            order: 3
 
   - key: "变量"
     name: "变量"

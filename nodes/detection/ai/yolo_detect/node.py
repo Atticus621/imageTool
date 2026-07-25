@@ -10,10 +10,9 @@ from nodes.detection.detection_base import DetectionBase
 class YoloDetectNode(DetectionBase):
     """YOLO 目标检测节点。"""
 
-    NODE_ID = "detection/ai/yolo_detect"
-    NODE_NAME = "YOLO检测"
-    NODE_CATEGORY = "检测"
-    NODE_DESCRIPTION = "使用 ultralytics YOLOv8+ 模型进行目标检测"
+    NODE_ID = "detection/yolo/yolo_detect"
+    NODE_NAME = "YOLO 检测"
+    NODE_DESCRIPTION = "使用 YOLOv8+ 模型进行目标检测，支持读取模型类别和输出标注图像"
 
     def _get_detection_params(self) -> dict:
         model_path_param = self.params.get("model_path", [])

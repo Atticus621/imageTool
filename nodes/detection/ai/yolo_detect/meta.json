@@ -1,8 +1,6 @@
 {
     "id": "detection/yolo/yolo_detect",
     "name": "YOLO 检测",
-    "category": "检测",
-    "subcategory": "",
     "description": "使用 YOLOv8+ 模型进行目标检测，支持读取模型类别和输出标注图像",
     "version": "1.0.0",
     "icon": "",
@@ -21,8 +19,22 @@
         }
     ],
     "optional_ports": [
-        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
-        {"name": "forbidden", "label": "禁止区域", "port_type": "roi", "direction": "input", "default": false, "group": "input"}
+        {
+            "name": "roi",
+            "label": "ROI 输入",
+            "port_type": "roi",
+            "direction": "input",
+            "default": false,
+            "group": "input"
+        },
+        {
+            "name": "forbidden",
+            "label": "禁止区域",
+            "port_type": "roi",
+            "direction": "input",
+            "default": false,
+            "group": "input"
+        }
     ],
     "params": [
         {

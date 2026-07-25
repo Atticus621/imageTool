@@ -1,7 +1,6 @@
 {
     "id": "detection/shape/circle_detect",
     "name": "圆形检测",
-    "category": "检测",
     "description": "使用霍夫圆变换检测图像中的圆形",
     "version": "1.0.0",
     "icon": "",
@@ -20,11 +19,46 @@
         }
     ],
     "optional_ports": [
-        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
-        {"name": "forbidden", "label": "禁止区域", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
-        {"name": "images", "label": "标注图像", "port_type": "image", "direction": "output", "default": false, "group": "output"},
-        {"name": "count", "label": "检测数量", "port_type": "number", "direction": "output", "default": false, "group": "output"},
-        {"name": "stats", "label": "统计信息", "port_type": "string", "direction": "output", "default": false, "group": "output"}
+        {
+            "name": "roi",
+            "label": "ROI 输入",
+            "port_type": "roi",
+            "direction": "input",
+            "default": false,
+            "group": "input"
+        },
+        {
+            "name": "forbidden",
+            "label": "禁止区域",
+            "port_type": "roi",
+            "direction": "input",
+            "default": false,
+            "group": "input"
+        },
+        {
+            "name": "images",
+            "label": "标注图像",
+            "port_type": "image",
+            "direction": "output",
+            "default": false,
+            "group": "output"
+        },
+        {
+            "name": "count",
+            "label": "检测数量",
+            "port_type": "number",
+            "direction": "output",
+            "default": false,
+            "group": "output"
+        },
+        {
+            "name": "stats",
+            "label": "统计信息",
+            "port_type": "string",
+            "direction": "output",
+            "default": false,
+            "group": "output"
+        }
     ],
     "params": [
         {
@@ -33,7 +67,10 @@
             "label": "检测方法",
             "default": "hough",
             "options": [
-                {"value": "hough", "label": "基尔霍夫检测"}
+                {
+                    "value": "hough",
+                    "label": "基尔霍夫检测"
+                }
             ]
         },
         {
@@ -43,8 +80,7 @@
             "default": 1.2,
             "min": 1.0,
             "max": 3.0,
-            "step": 0.1,
-            "pinned": true
+            "step": 0.1
         },
         {
             "name": "min_dist",

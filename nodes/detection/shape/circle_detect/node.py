@@ -11,7 +11,6 @@ from nodes.detection.detection_base import DetectionBase
 class CircleDetectionNode(DetectionBase):
     NODE_ID = "detection/shape/circle_detect"
     NODE_NAME = "圆形检测"
-    NODE_CATEGORY = "形状检测"
     NODE_DESCRIPTION = "使用霍夫圆变换检测图像中的圆形"
 
     def _get_detection_params(self) -> dict:

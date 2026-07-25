@@ -20,8 +20,6 @@ class MaskOperationsNode(NodeBase):
     # ── Node metadata (no meta.json needed) ─────────────────────────
     NODE_ID = "processing/arithmetic/mask_ops"
     NODE_NAME = "掩码操作"
-    NODE_CATEGORY = "图像处理"
-    NODE_SUBCATEGORY = "运算"
     NODE_DESCRIPTION = "对多个掩码图像进行逻辑运算（与/或/非/异或/与非/或非），支持动态输入个数"
     NODE_INPUTS = [
         {"name": "mask_a", "type": "image", "label": "掩码 A", "count_param": "input_count"},
@@ -39,7 +37,7 @@ class MaskOperationsNode(NodeBase):
     ]
     NODE_PARAMS = [
         {
-            "name": "operation", "type": "combo", "label": "逻辑运算", "default": "and", "pinned": True,
+            "name": "operation", "type": "combo", "label": "逻辑运算", "default": "and",
             "options": [
                 {"value": "and",  "label": "AND (与)"},
                 {"value": "or",   "label": "OR (或)"},

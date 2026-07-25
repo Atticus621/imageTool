@@ -50,6 +50,7 @@ class ExecutionController(QObject):
 
         self._loop_mode = False
         self._running = False
+        self._streaming_mode = False
 
         # Listen to engine lifecycle for state tracking + loop restart
         engine.execution_started.connect(self._on_started)
@@ -68,6 +69,18 @@ class ExecutionController(QObject):
     def is_running(self) -> bool:
         """Whether the engine is currently executing."""
         return self._running
+
+    @property
+    def streaming_mode(self) -> bool:
+        """Whether streaming mode is active."""
+        return self._streaming_mode
+
+    def set_streaming_mode(self, enabled: bool):
+        """Switch between batch and streaming execution."""
+        self._streaming_mode = enabled
+        self._engine.set_streaming_mode(enabled)
+        self.state_changed.emit()
+        logger.info(f"Streaming mode: {'enabled' if enabled else 'disabled'}")
 
     # ------------------------------------------------------------------
     # Public API — toolbar / menu / bridge

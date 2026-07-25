@@ -11,11 +11,14 @@ from PySide6.QtCore import Qt, QSize, Signal, QPoint, QPointF, QRectF
 from PySide6.QtGui import QPainter, QTransform
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
-    QScrollArea, QPushButton, QFrame, QGraphicsScene,
+    QScrollArea, QPushButton, QFrame, QGraphicsScene, QSpinBox,
 )
 from ui.widgets.zoomable_graphics_view import ZoomableGraphicsView
 from ui.widgets.coordinate_mapper import CoordinateMapper
-from ui.theme import BG_BASE, BORDER_DEFAULT, RADIUS_MD
+from ui.theme import (
+    BG_BASE, BG_INPUT, BORDER_DEFAULT, RADIUS_MD,
+    TEXT_PRIMARY, TEXT_SECONDARY, ACCENT, FONT_SIZE_SM, SPACING_SM,
+)
 
 from core.logger import logger
 from systems.execution.result import ExecutionResult
@@ -31,21 +34,19 @@ try:
 except ImportError:
     IImageDisplayProvider = None
 
-try:
-    from systems.image_display.models import DisplayInfo
-except ImportError:
-    from dataclasses import dataclass
-    @dataclass
-    class DisplayInfo:
-        actual_w: int = 0
-        actual_h: int = 0
-        display_w: int = 0
-        display_h: int = 0
+from systems.image_display.models import DisplayInfo
 
 try:
     from ui.widgets.ruler_overlay import RulerOverlay
 except ImportError:
     RulerOverlay = None
+
+try:
+    from core.roi.editor.overlay import ROIOverlay
+    from core.roi.editor.tcp_server import ROITcpServer
+except ImportError:
+    ROIOverlay = None
+    ROITcpServer = None
 
 
 # ------------------------------------------------------------------
@@ -108,21 +109,69 @@ class ImageSetWidget(QFrame):
         self._pixmap_item = None
         layout.addWidget(self._gv)
 
-        # thumbnails
-        self._thumb_row = QHBoxLayout()
-        self._thumb_container = QWidget()
-        self._thumb_container.setLayout(self._thumb_row)
-        layout.addWidget(self._thumb_container)
+        # Navigation bar: ◀ [1/10] ▶  [Jump to: ___]
+        self._nav_bar = QWidget()
+        nav_layout = QHBoxLayout(self._nav_bar)
+        nav_layout.setContentsMargins(0, 2, 0, 2)
+        nav_layout.setSpacing(SPACING_SM)
+
+        self._prev_btn = QPushButton("<-")
+        self._prev_btn.setFixedSize(32, 22)
+        self._prev_btn.setStyleSheet(
+            f"QPushButton {{ padding: 2px 4px; font-size: {FONT_SIZE_SM}; min-height: 16px; height: 20px; }}"
+        )
+        self._prev_btn.clicked.connect(self._on_prev)
+        nav_layout.addWidget(self._prev_btn)
+
+        self._page_label = QLabel("0 / 0")
+        self._page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._page_label.setStyleSheet(
+            f"color: {TEXT_PRIMARY}; font-size: {FONT_SIZE_SM};"
+            f"background-color: {BG_INPUT}; border: 1px solid {BORDER_DEFAULT};"
+            f"border-radius: {RADIUS_MD}; padding: 2px 8px; min-width: 60px;"
+        )
+        nav_layout.addWidget(self._page_label)
+
+        self._next_btn = QPushButton("->")
+        self._next_btn.setFixedSize(32, 22)
+        self._next_btn.setStyleSheet(
+            f"QPushButton {{ padding: 2px 4px; font-size: {FONT_SIZE_SM}; min-height: 16px; height: 20px; }}"
+        )
+        self._next_btn.clicked.connect(self._on_next)
+        nav_layout.addWidget(self._next_btn)
+
+        nav_layout.addSpacing(8)
+
+        jump_label = QLabel("跳转:")
+        jump_label.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: {FONT_SIZE_SM};")
+        nav_layout.addWidget(jump_label)
+
+        self._jump_spin = QSpinBox()
+        self._jump_spin.setRange(1, 1)
+        self._jump_spin.setFixedSize(60, 22)
+        self._jump_spin.setStyleSheet(
+            f"color: {TEXT_PRIMARY}; font-size: {FONT_SIZE_SM};"
+            f"background-color: {BG_INPUT}; border: 1px solid {BORDER_DEFAULT};"
+            f"border-radius: {RADIUS_MD}; padding: 2px 4px;"
+        )
+        self._jump_spin.returnPressed.connect(self._on_jump)
+        nav_layout.addWidget(self._jump_spin)
+
+        nav_layout.addStretch()
+        layout.addWidget(self._nav_bar)
 
         # Measurement result label (hidden by default)
         self._measurement_label = QLabel("")
         self._measurement_label.hide()
         layout.addWidget(self._measurement_label)
 
-        self._rebuild_thumbs()
+        self._update_nav_bar()
 
         # Ruler overlay (created after gv is set up)
         self._init_ruler_overlay()
+
+        # ROI editor overlay
+        self._init_roi_overlay()
 
     def _init_mouse_tracking(self):
         self._gv.viewport().setMouseTracking(True)
@@ -157,22 +206,80 @@ class ImageSetWidget(QFrame):
         self._ruler_overlay.clear_measurements()
         self._measurement_label.hide()
 
-    def _rebuild_thumbs(self):
-        while self._thumb_row.count():
-            child = self._thumb_row.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+    # ------------------------------------------------------------------
+    # ROI Editor overlay
+    # ------------------------------------------------------------------
 
-        self._thumb_buttons = []
-        for i in range(len(self._images)):
-            btn = QPushButton(str(i + 1))
-            btn.setFixedSize(28, 22)
-            btn.setCheckable(True)
-            idx = i
-            btn.clicked.connect(lambda checked, ii=idx: self._select_image(ii))
-            self._thumb_row.addWidget(btn)
-            self._thumb_buttons.append(btn)
-        self._thumb_row.addStretch()
+    def _init_roi_overlay(self):
+        """初始化 ROI 编辑器叠加层，并启动 TCP 调试服务器。"""
+        self._roi_overlay = None
+        self._roi_tcp_server = None
+        logger.info(f"[ROI] Initializing overlay (ROIOverlay={ROIOverlay is not None}, ROITcpServer={ROITcpServer is not None})")
+        if ROIOverlay is not None:
+            self._roi_overlay = ROIOverlay(
+                parent=self._gv.viewport(),
+                mapper=self._mapper,
+            )
+            self._roi_overlay.setGeometry(self._gv.viewport().rect())
+            self._roi_overlay.hide()
+            # 立即启动 TCP 调试服务器（无需等待 UI 启用）
+            if ROITcpServer is not None:
+                self._roi_tcp_server = ROITcpServer(self._roi_overlay)
+                self._roi_tcp_server.start()
+                logger.info("[ROI] TCP server started on 127.0.0.1:9527")
+
+    def set_roi_editor_enabled(self, enabled: bool):
+        """启用/禁用 ROI 编辑器（TCP 服务器始终运行）。"""
+        if self._roi_overlay is None:
+            return
+        if enabled:
+            self._roi_overlay.setGeometry(self._gv.viewport().rect())
+            self._roi_overlay.show()
+            self._roi_overlay.raise_()
+            # 禁用标尺鼠标事件
+            if hasattr(self, '_ruler_overlay') and self._ruler_overlay:
+                self._ruler_overlay.setAttribute(
+                    Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+                )
+        else:
+            self._roi_overlay.hide()
+            # 恢复标尺鼠标事件
+            if hasattr(self, '_ruler_overlay') and self._ruler_overlay:
+                self._ruler_overlay.setAttribute(
+                    Qt.WidgetAttribute.WA_TransparentForMouseEvents, False
+                )
+
+    def clear_roi_editor(self):
+        """清除所有 ROI 形状。"""
+        if self._roi_overlay:
+            self._roi_overlay.clear_all()
+
+    def _update_nav_bar(self):
+        """Update navigation bar state to reflect current selection."""
+        total = len(self._images)
+        current = self._current_index + 1 if total > 0 else 0
+
+        self._page_label.setText(f"{current} / {total}")
+        self._jump_spin.blockSignals(True)
+        self._jump_spin.setRange(1, max(1, total))
+        self._jump_spin.setValue(current)
+        self._jump_spin.blockSignals(False)
+
+        self._prev_btn.setEnabled(total > 0 and self._current_index > 0)
+        self._next_btn.setEnabled(total > 0 and self._current_index < total - 1)
+
+    def _on_prev(self):
+        if self._current_index > 0:
+            self._select_image(self._current_index - 1)
+
+    def _on_next(self):
+        if self._current_index < len(self._images) - 1:
+            self._select_image(self._current_index + 1)
+
+    def _on_jump(self):
+        target = self._jump_spin.value() - 1  # convert to 0-based
+        if 0 <= target < len(self._images):
+            self._select_image(target)
 
     # ------------------------------------------------------------------
     # Image selection / update
@@ -193,7 +300,7 @@ class ImageSetWidget(QFrame):
         if self._current_index >= len(self._images):
             self._current_index = max(0, len(self._images) - 1)
 
-        self._rebuild_thumbs()
+        self._update_nav_bar()
         if self._images:
             self._select_image(self._current_index)
 
@@ -253,8 +360,7 @@ class ImageSetWidget(QFrame):
             self._gv.fitInView(
                 self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
             )
-        for i, btn in enumerate(self._thumb_buttons):
-            btn.setChecked(i == self._current_index)
+        self._update_nav_bar()
         self.image_changed.emit()
 
     def _load_pixmap(self, img: np.ndarray, fit: bool = False):
@@ -289,9 +395,7 @@ class ImageSetWidget(QFrame):
             )
             self._base_transform = self._gv.transform()
 
-        for i, btn in enumerate(self._thumb_buttons):
-            btn.setChecked(i == self._current_index)
-
+        self._update_nav_bar()
         self.image_changed.emit()
 
     def update_current_image(self, img: np.ndarray, color_space: str = "bgr"):
@@ -366,6 +470,13 @@ class ImageSetWidget(QFrame):
 
         if obj is self._gv.viewport() and event.type() == QEvent.Type.MouseMove:
             self._handle_mouse_move(event)
+        if obj is self._gv.viewport() and event.type() == QEvent.Type.Resize:
+            # 更新叠加层几何尺寸
+            rect = self._gv.viewport().rect()
+            if hasattr(self, '_ruler_overlay') and self._ruler_overlay:
+                self._ruler_overlay.setGeometry(rect)
+            if hasattr(self, '_roi_overlay') and self._roi_overlay:
+                self._roi_overlay.setGeometry(rect)
         return super().eventFilter(obj, event)
 
     def _handle_mouse_move(self, event):
@@ -414,6 +525,9 @@ class ImageViewerWidget(QWidget):
         self._current_mode = "output"
         self._current_widget: ImageSetWidget | None = None
         self._ruler_enabled = False
+        self._roi_editor_enabled = False
+        self._custom_sets: dict[str, list] = {}  # display_id -> list[ImageSetEntry]
+        self._custom_display_ids: list[str] = []  # ordered display IDs in combo
         self._init_ui()
         logger.info("ImageViewerWidget initialized (QGraphicsView)")
 
@@ -442,6 +556,26 @@ class ImageViewerWidget(QWidget):
         toolbar.addWidget(self._set_combo)
 
         toolbar.addStretch()
+
+        # ROI Editor toggle button (alongside ruler)
+        self._roi_editor_btn = QPushButton("ROI")
+        self._roi_editor_btn.setCheckable(True)
+        self._roi_editor_btn.setFixedHeight(24)
+        self._roi_editor_btn.setStyleSheet(
+            f"QPushButton {{ padding: 2px 8px; font-size: {FONT_SIZE_SM}; }}"
+            f"QPushButton:checked {{ background-color: {ACCENT}; color: white; }}"
+        )
+        self._roi_editor_btn.toggled.connect(self._on_roi_editor_toggled)
+        toolbar.addWidget(self._roi_editor_btn)
+
+        # ROI Shape tool combo
+        self._roi_tool_combo = QComboBox()
+        self._roi_tool_combo.addItems(["Select", "Rect", "Circle", "Polygon"])
+        self._roi_tool_combo.setMinimumWidth(80)
+        self._roi_tool_combo.setEnabled(False)
+        self._roi_tool_combo.currentTextChanged.connect(self._on_roi_tool_changed)
+        toolbar.addWidget(self._roi_tool_combo)
+
         self._count_label = QLabel("")
         toolbar.addWidget(self._count_label)
         layout.addLayout(toolbar)
@@ -459,6 +593,10 @@ class ImageViewerWidget(QWidget):
 
         self._refresh_display()
 
+        # ROI 编辑器：如果当前没有 ImageSetWidget，创建一个最小化的用于 TCP 调试
+        if self._current_widget is None:
+            self._init_roi_standalone()
+
     # ------------------------------------------------------------------
     # Ruler — coordinated across ImageSetWidgets
     # ------------------------------------------------------------------
@@ -472,6 +610,71 @@ class ImageViewerWidget(QWidget):
     def clear_ruler(self):
         if self._current_widget:
             self._current_widget.clear_ruler()
+
+    # ------------------------------------------------------------------
+    # ROI Editor — coordinated across ImageSetWidgets
+    # ------------------------------------------------------------------
+
+    def _on_roi_editor_toggled(self, enabled: bool):
+        self._roi_editor_enabled = enabled
+        self._roi_tool_combo.setEnabled(enabled)
+        if self._current_widget:
+            self._current_widget.set_roi_editor_enabled(enabled)
+
+    def _on_roi_tool_changed(self, text: str):
+        tool_map = {"Select": "select", "Rect": "rect", "Circle": "circle", "Polygon": "polygon"}
+        tool = tool_map.get(text, "select")
+        overlay = None
+        if self._current_widget and self._current_widget._roi_overlay:
+            overlay = self._current_widget._roi_overlay
+        elif hasattr(self, '_roi_overlay') and self._roi_overlay:
+            overlay = self._roi_overlay
+        if overlay:
+            overlay.set_tool(tool)
+
+    def toggle_roi_editor(self):
+        self._roi_editor_btn.toggle()
+        return self._roi_editor_enabled
+
+    def clear_roi_editor(self):
+        if self._current_widget:
+            self._current_widget.clear_roi_editor()
+
+    def _init_roi_standalone(self):
+        """无图像时创建可见的 ROI overlay + TCP 服务器用于调试。"""
+        if ROIOverlay is None or ROITcpServer is None:
+            return
+        from ui.widgets.zoomable_graphics_view import ZoomableGraphicsView
+        from PySide6.QtWidgets import QGraphicsScene
+
+        # 创建 graphics view 作为 overlay 容器
+        self._roi_standalone_gv = ZoomableGraphicsView()
+        self._roi_standalone_gv.setMinimumSize(800, 600)
+        self._roi_standalone_gv.setStyleSheet(
+            f"background-color: {BG_BASE}; border: 1px solid {BORDER_DEFAULT}; border-radius: {RADIUS_MD};"
+        )
+        self._roi_standalone_gv.setScene(QGraphicsScene())
+
+        # 先加入布局并显示，确保 viewport 有正确的尺寸
+        self._placeholder.hide()
+        self._set_container.show()
+        self._set_layout.addWidget(self._roi_standalone_gv)
+        self._roi_standalone_gv.show()
+
+        # 创建 overlay（viewport 现在有正确的尺寸）
+        mapper = CoordinateMapper(self._roi_standalone_gv)
+        self._roi_overlay = ROIOverlay(
+            parent=self._roi_standalone_gv.viewport(),
+            mapper=mapper,
+        )
+        self._roi_overlay.setGeometry(self._roi_standalone_gv.viewport().rect())
+        self._roi_overlay.show()
+        self._roi_overlay.raise_()
+
+        # 启动 TCP 服务器
+        self._roi_tcp_server = ROITcpServer(self._roi_overlay)
+        self._roi_tcp_server.start()
+        logger.info(f"[ROI] Standalone ROI editor visible, viewport={self._roi_standalone_gv.viewport().rect()}")
 
     # ------------------------------------------------------------------
     # Zoom
@@ -515,15 +718,23 @@ class ImageViewerWidget(QWidget):
     def _get_current_sets(self):
         if self._current_mode == "output":
             return self._result.output_sets
-        return self._result.input_sets
+        if self._current_mode == "input":
+            return self._result.input_sets
+        # Custom display mode: mode is "custom:<display_id>"
+        if self._current_mode.startswith("custom:"):
+            display_id = self._current_mode[7:]  # strip "custom:" prefix
+            return self._custom_sets.get(display_id, [])
+        return []
 
     def _on_mode_changed(self, index):
         self._current_mode = self._mode_combo.itemData(index)
         self.clear_ruler()
+        self.clear_roi_editor()
         self._refresh_display()
 
     def _on_set_changed(self, index):
         self.clear_ruler()
+        self.clear_roi_editor()
         self._show_current_set()
 
     def _refresh_display(self):
@@ -587,9 +798,71 @@ class ImageViewerWidget(QWidget):
         # Create new widget
         widget = ImageSetWidget(s.name, s.images, self._image_display)
         widget.image_changed.connect(self.clear_ruler)
+        widget.image_changed.connect(self.clear_roi_editor)
         widget.pixel_hovered.connect(self.pixel_hovered.emit)
         widget.ruler_measurement.connect(self._on_ruler_measurement)
         if self._ruler_enabled:
             widget.set_ruler_enabled(True)
+        if self._roi_editor_enabled:
+            widget.set_roi_editor_enabled(True)
         self._set_layout.addWidget(widget)
         self._current_widget = widget
+
+    # ------------------------------------------------------------------
+    # Custom display management
+    # ------------------------------------------------------------------
+
+    def add_custom_display(self, display_id: str, name: str) -> None:
+        """Add a new custom display to the combo box."""
+        if display_id in self._custom_display_ids:
+            return
+        self._custom_display_ids.append(display_id)
+        self._mode_combo.blockSignals(True)
+        self._mode_combo.addItem(f"[自定义] {name}", f"custom:{display_id}")
+        self._mode_combo.blockSignals(False)
+
+    def remove_custom_display(self, display_id: str) -> None:
+        """Remove a custom display from the combo box."""
+        if display_id not in self._custom_display_ids:
+            return
+        self._custom_display_ids.remove(display_id)
+        self._custom_sets.pop(display_id, None)
+        # Find and remove the combo item
+        for i in range(self._mode_combo.count()):
+            if self._mode_combo.itemData(i) == f"custom:{display_id}":
+                self._mode_combo.removeItem(i)
+                break
+
+    def rename_custom_display(self, display_id: str, new_name: str) -> None:
+        """Rename a custom display in the combo box."""
+        for i in range(self._mode_combo.count()):
+            if self._mode_combo.itemData(i) == f"custom:{display_id}":
+                self._mode_combo.blockSignals(True)
+                self._mode_combo.setItemText(i, f"[自定义] {new_name}")
+                self._mode_combo.blockSignals(False)
+                break
+
+    def set_custom_display_data(self, display_id: str, sets: list) -> None:
+        """Update the image data for a custom display."""
+        self._custom_sets[display_id] = sets
+        # If currently viewing this custom display, refresh
+        if self._current_mode == f"custom:{display_id}":
+            self._refresh_display()
+
+    def sync_custom_displays(self, displays: dict[str, str]) -> None:
+        """Sync the combo box with the current set of custom displays.
+
+        Args:
+            displays: {display_id: display_name} of all custom displays.
+        """
+        # Remove displays that no longer exist
+        for did in list(self._custom_display_ids):
+            if did not in displays:
+                self.remove_custom_display(did)
+
+        # Add new displays
+        for did, name in displays.items():
+            if did not in self._custom_display_ids:
+                self.add_custom_display(did, name)
+            else:
+                self.rename_custom_display(did, name)

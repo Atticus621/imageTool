@@ -1,16 +1,26 @@
 {
     "id": "processing/preprocess/binarize",
     "name": "二值化",
-    "category": "图像处理",
-    "subcategory": "预处理",
     "description": "图像二值化：固定阈值、自适应阈值、Otsu自动阈值",
     "version": "1.0.0",
     "inputs": [
-        {"name": "images", "type": "image", "label": "图像输入"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输入"
+        }
     ],
     "outputs": [
-        {"name": "images", "type": "image", "label": "二值图像"},
-        {"name": "mask", "type": "image", "label": "掩码输出"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "二值图像"
+        },
+        {
+            "name": "mask",
+            "type": "image",
+            "label": "掩码输出"
+        }
     ],
     "params": [
         {
@@ -18,12 +28,23 @@
             "type": "combo",
             "label": "二值化方法",
             "default": "otsu",
-            "pinned": true,
             "options": [
-                {"value": "fixed", "label": "固定阈值"},
-                {"value": "adaptive_mean", "label": "自适应均值"},
-                {"value": "adaptive_gaussian", "label": "自适应高斯"},
-                {"value": "otsu", "label": "Otsu自动"}
+                {
+                    "value": "fixed",
+                    "label": "固定阈值"
+                },
+                {
+                    "value": "adaptive_mean",
+                    "label": "自适应均值"
+                },
+                {
+                    "value": "adaptive_gaussian",
+                    "label": "自适应高斯"
+                },
+                {
+                    "value": "otsu",
+                    "label": "Otsu自动"
+                }
             ]
         },
         {

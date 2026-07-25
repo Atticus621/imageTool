@@ -16,7 +16,6 @@ class RectDetectNode(NodeBase):
 
     NODE_ID = "detection/shape/rect_detect"
     NODE_NAME = "矩形检测"
-    NODE_CATEGORY = "检测"
     NODE_DESCRIPTION = "检测图像中的矩形和四边形"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},
@@ -27,6 +26,8 @@ class RectDetectNode(NodeBase):
     ]
     NODE_OPTIONAL_PORTS = [
         {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": False, "group": "input"},
+        {"name": "count", "label": "检测数量", "port_type": "number", "direction": "output", "default": False, "group": "output"},
+        {"name": "stats", "label": "统计信息", "port_type": "string", "direction": "output", "default": False, "group": "output"},
     ]
     NODE_PARAMS = [
         {"name": "min_area", "type": "int_slider", "label": "最小面积", "default": 500, "min": 10, "max": 10000, "step": 10},
@@ -49,7 +50,6 @@ class RectDetectNode(NodeBase):
             self.set_state(NodeState.ERROR)
             return False
 
-        output_annotated = self.params.get("_opt_annotated", False)
         roi_mgr = ROIManager.instance()
 
         results = []

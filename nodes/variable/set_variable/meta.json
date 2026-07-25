@@ -1,0 +1,11 @@
+{
+    "id": "variable/set",
+    "name": "设置变量",
+    "description": "将输入值设置为全局变量",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [],
+    "outputs": [],
+    "optional_ports": [],
+    "params": []
+}

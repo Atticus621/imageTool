@@ -1,21 +1,52 @@
 {
     "id": "detection/location/centroid",
     "name": "质心定位",
-    "category": "检测",
-    "subcategory": "",
     "description": "通过轮廓矩计算物体质心位置",
     "version": "1.0.0",
     "inputs": [
-        {"name": "images", "type": "image", "label": "图像输入"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输入"
+        }
     ],
     "outputs": [
-        {"name": "images", "type": "image", "label": "标注图像"},
-        {"name": "rois", "type": "roi", "label": "检测区域"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "标注图像"
+        },
+        {
+            "name": "rois",
+            "type": "roi",
+            "label": "检测区域"
+        }
     ],
     "optional_ports": [
-        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": false, "group": "input"},
-        {"name": "count", "label": "检测数量", "port_type": "number", "direction": "output", "default": false, "group": "output"},
-        {"name": "stats", "label": "统计信息", "port_type": "string", "direction": "output", "default": false, "group": "output"}
+        {
+            "name": "roi",
+            "label": "ROI 输入",
+            "port_type": "roi",
+            "direction": "input",
+            "default": false,
+            "group": "input"
+        },
+        {
+            "name": "count",
+            "label": "检测数量",
+            "port_type": "number",
+            "direction": "output",
+            "default": false,
+            "group": "output"
+        },
+        {
+            "name": "stats",
+            "label": "统计信息",
+            "port_type": "string",
+            "direction": "output",
+            "default": false,
+            "group": "output"
+        }
     ],
     "params": [
         {

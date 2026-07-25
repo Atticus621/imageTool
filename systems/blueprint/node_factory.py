@@ -31,13 +31,16 @@ class NodeFactory:
     # Node creation
     # ------------------------------------------------------------------
 
-    def create_node(
+    def create_graph_node(
         self,
         graph: "NodeGraph",
         node_id: str,
         pos: tuple[float, float] | None = None,
     ) -> "BaseNode | None":
-        """Create a GraphNode of the given type on the graph.
+        """创建画布上的图节点（用于 UI 显示）。
+
+        注意：这创建的是画布上的 GraphNode，不是用于执行的 NodeBase 实例。
+        执行节点创建请使用 NodeRegistry.create_exec_node()。
 
         Args:
             graph: The NodeGraphQt graph instance.
@@ -82,12 +85,13 @@ class NodeFactory:
             return None
 
         old_meta_id = getattr(old_node, "_node_id", "")
-        old_meta = self._registry.get_meta(old_meta_id)
 
-        if old_meta and old_meta.category != meta.category:
+        if not self._registry.same_category(old_meta_id, new_node_id):
+            old_cat = self._registry.get_category(old_meta_id)
+            new_cat = self._registry.get_category(new_node_id)
             logger.warning(
                 f"Cannot replace: category mismatch "
-                f"({old_meta.category} != {meta.category})"
+                f"({old_cat} != {new_cat})"
             )
             return None
 
@@ -107,7 +111,7 @@ class NodeFactory:
         pos = old_node.pos()
         graph.remove_node(old_node)
 
-        new_node = self.create_node(graph, new_node_id, pos=(pos.x(), pos.y()))
+        new_node = self.create_graph_node(graph, new_node_id, pos=(pos.x(), pos.y()))
         if new_node is None:
             return None
 

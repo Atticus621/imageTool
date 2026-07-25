@@ -31,7 +31,7 @@ class NodeFactory:
     # Node creation
     # ------------------------------------------------------------------
 
-    def create_node(
+    def create_graph_node(
         self,
         graph: "NodeGraph",
         node_id: str,
@@ -107,7 +107,7 @@ class NodeFactory:
         pos = old_node.pos()
         graph.remove_node(old_node)
 
-        new_node = self.create_node(graph, new_node_id, pos=(pos.x(), pos.y()))
+        new_node = self.create_graph_node(graph, new_node_id, pos=(pos.x(), pos.y()))
         if new_node is None:
             return None
 

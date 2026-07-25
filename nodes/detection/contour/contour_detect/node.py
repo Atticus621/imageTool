@@ -16,7 +16,6 @@ class ContourDetectNode(NodeBase):
 
     NODE_ID = "detection/contour/contour_detect"
     NODE_NAME = "轮廓检测"
-    NODE_CATEGORY = "检测"
     NODE_DESCRIPTION = "检测图像中的轮廓，支持面积和顶点数过滤"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},
@@ -27,9 +26,11 @@ class ContourDetectNode(NodeBase):
     ]
     NODE_OPTIONAL_PORTS = [
         {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": False, "group": "input"},
+        {"name": "count", "label": "检测数量", "port_type": "number", "direction": "output", "default": False, "group": "output"},
+        {"name": "stats", "label": "统计信息", "port_type": "string", "direction": "output", "default": False, "group": "output"},
     ]
     NODE_PARAMS = [
-        {"name": "min_area", "type": "int_slider", "label": "最小面积", "default": 500, "min": 10, "max": 10000, "step": 10, "pinned": True},
+        {"name": "min_area", "type": "int_slider", "label": "最小面积", "default": 500, "min": 10, "max": 10000, "step": 10},
         {"name": "max_area", "type": "int_slider", "label": "最大面积", "default": 100000, "min": 1000, "max": 1000000, "step": 100},
         {"name": "epsilon_factor", "type": "float_slider", "label": "近似精度", "default": 0.02, "min": 0.001, "max": 0.1, "step": 0.001},
         {"name": "retrieval_mode", "type": "combo", "label": "检索模式", "default": "tree",
@@ -58,7 +59,6 @@ class ContourDetectNode(NodeBase):
             self.set_state(NodeState.ERROR)
             return False
 
-        output_annotated = self.params.get("_opt_annotated", False)
         retr = self._RETR_MAP.get(retrieval_mode, cv2.RETR_TREE)
         roi_mgr = ROIManager.instance()
 

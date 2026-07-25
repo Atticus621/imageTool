@@ -1,8 +1,6 @@
 {
     "id": "processing/color_conversion/color_filter",
     "name": "颜色过滤",
-    "category": "颜色处理",
-    "subcategory": "",
     "description": "根据选定通道的数值范围过滤图像，支持输入图像颜色空间与过滤通道空间不同的情况",
     "version": "1.0.0",
     "inputs": [
@@ -25,7 +23,14 @@
         }
     ],
     "optional_ports": [
-        {"name": "roi", "label": "ROI 输入", "port_type": "roi", "direction": "input", "default": false, "group": "input"}
+        {
+            "name": "roi",
+            "label": "ROI 输入",
+            "port_type": "roi",
+            "direction": "input",
+            "default": false,
+            "group": "input"
+        }
     ],
     "params": [
         {
@@ -34,22 +39,52 @@
             "label": "通道类型",
             "default": "rgb",
             "options": [
-                {"value": "bgr", "label": "BGR (OpenCV 默认)"},
-                {"value": "rgb", "label": "RGB"},
-                {"value": "hsv", "label": "HSV"},
-                {"value": "hls", "label": "HLS"},
-                {"value": "lab", "label": "LAB"},
-                {"value": "luv", "label": "LUV"},
-                {"value": "xyz", "label": "XYZ"},
-                {"value": "ycr_cb", "label": "YCrCb"},
-                {"value": "gray", "label": "GRAY (灰度)"}
+                {
+                    "value": "bgr",
+                    "label": "BGR (OpenCV 默认)"
+                },
+                {
+                    "value": "rgb",
+                    "label": "RGB"
+                },
+                {
+                    "value": "hsv",
+                    "label": "HSV"
+                },
+                {
+                    "value": "hls",
+                    "label": "HLS"
+                },
+                {
+                    "value": "lab",
+                    "label": "LAB"
+                },
+                {
+                    "value": "luv",
+                    "label": "LUV"
+                },
+                {
+                    "value": "xyz",
+                    "label": "XYZ"
+                },
+                {
+                    "value": "ycr_cb",
+                    "label": "YCrCb"
+                },
+                {
+                    "value": "gray",
+                    "label": "GRAY (灰度)"
+                }
             ]
         },
         {
             "name": "channel_0",
             "type": "channel_range",
             "label": "通道 1",
-            "default": [0, 255],
+            "default": [
+                0,
+                255
+            ],
             "min": 0,
             "max": 255,
             "step": 1,
@@ -59,7 +94,10 @@
             "name": "channel_1",
             "type": "channel_range",
             "label": "通道 2",
-            "default": [0, 255],
+            "default": [
+                0,
+                255
+            ],
             "min": 0,
             "max": 255,
             "step": 1,
@@ -69,7 +107,10 @@
             "name": "channel_2",
             "type": "channel_range",
             "label": "通道 3",
-            "default": [0, 255],
+            "default": [
+                0,
+                255
+            ],
             "min": 0,
             "max": 255,
             "step": 1,

@@ -87,7 +87,7 @@ class QtExecutionEngine(QObject):
             info = gn.to_pipeline_info()
             node_infos[gn] = info
 
-            exec_node = node_registry.create_node(node_id)
+            exec_node = node_registry.create_exec_node(node_id)
             if exec_node:
                 exec_nodes[gn] = exec_node
                 exec_node.set_state(NodeState.RUNNING)

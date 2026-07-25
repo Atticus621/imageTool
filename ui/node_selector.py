@@ -65,15 +65,17 @@ class NodeSelectorWindow(QDialog):
         self._combo_node.blockSignals(True)
 
         # Category
-        idx = self._combo_category.findData(meta.category)
+        cat = node_registry.get_category(meta.id)
+        idx = self._combo_category.findData(cat)
         if idx >= 0:
             self._combo_category.setCurrentIndex(idx)
 
         # Subcategory
         tree = node_registry.get_category_tree()
-        cat_node = tree.get(meta.category)
+        cat_node = tree.get(cat)
         if cat_node:
-            self._rebuild_subcategory_combo(cat_node, meta.subcategory)
+            sub = node_registry.get_subcategory(meta.id)
+            self._rebuild_subcategory_combo(cat_node, sub)
 
             # Node items
             sub_key = self._combo_subcategory.currentData()
@@ -313,7 +315,7 @@ class NodeSelectorWindow(QDialog):
 
         if old_meta is None or new_meta is None:
             return
-        if old_meta.category != new_meta.category:
+        if not node_registry.same_category(old_meta_id, new_node_id):
             QMessageBox.warning(self, "替换失败", "只能替换同类型的节点")
             return
 

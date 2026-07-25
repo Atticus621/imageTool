@@ -1,15 +1,21 @@
 {
     "id": "processing/transform/resize_crop",
     "name": "缩放裁剪",
-    "category": "图像处理",
-    "subcategory": "预处理",
     "description": "图像缩放、裁剪、旋转",
     "version": "1.0.0",
     "inputs": [
-        {"name": "images", "type": "image", "label": "图像输入"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输入"
+        }
     ],
     "outputs": [
-        {"name": "images", "type": "image", "label": "图像输出"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输出"
+        }
     ],
     "params": [
         {
@@ -17,11 +23,19 @@
             "type": "combo",
             "label": "操作模式",
             "default": "resize",
-            "pinned": true,
             "options": [
-                {"value": "resize", "label": "缩放"},
-                {"value": "crop", "label": "裁剪"},
-                {"value": "rotate", "label": "旋转"}
+                {
+                    "value": "resize",
+                    "label": "缩放"
+                },
+                {
+                    "value": "crop",
+                    "label": "裁剪"
+                },
+                {
+                    "value": "rotate",
+                    "label": "旋转"
+                }
             ]
         },
         {

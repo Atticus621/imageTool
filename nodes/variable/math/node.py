@@ -9,7 +9,6 @@ class MathNode(NodeBase):
 
     NODE_ID = "variable/math"
     NODE_NAME = "表达式计算"
-    NODE_CATEGORY = "变量"
     NODE_DESCRIPTION = "计算数学表达式，支持引用全局变量"
     NODE_INPUTS = []
     NODE_OUTPUTS = [

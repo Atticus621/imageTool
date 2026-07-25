@@ -1,15 +1,21 @@
 {
     "id": "detection/edge/edge_detect",
     "name": "边缘检测",
-    "category": "检测",
-    "subcategory": "",
     "description": "图像边缘检测：Canny、Sobel、Laplacian",
     "version": "1.0.0",
     "inputs": [
-        {"name": "images", "type": "image", "label": "图像输入"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "图像输入"
+        }
     ],
     "outputs": [
-        {"name": "images", "type": "image", "label": "边缘图像"}
+        {
+            "name": "images",
+            "type": "image",
+            "label": "边缘图像"
+        }
     ],
     "params": [
         {
@@ -17,11 +23,19 @@
             "type": "combo",
             "label": "检测方法",
             "default": "canny",
-            "pinned": true,
             "options": [
-                {"value": "canny", "label": "Canny"},
-                {"value": "sobel", "label": "Sobel"},
-                {"value": "laplacian", "label": "Laplacian"}
+                {
+                    "value": "canny",
+                    "label": "Canny"
+                },
+                {
+                    "value": "sobel",
+                    "label": "Sobel"
+                },
+                {
+                    "value": "laplacian",
+                    "label": "Laplacian"
+                }
             ]
         },
         {

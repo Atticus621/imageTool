@@ -15,8 +15,6 @@ class BrightnessNode(NodeBase):
 
     NODE_ID = "processing/brightness/brightness"
     NODE_NAME = "亮度对比度"
-    NODE_CATEGORY = "图像处理"
-    NODE_SUBCATEGORY = "预处理"
     NODE_DESCRIPTION = "调整图像亮度、对比度，支持CLAHE自适应均衡化"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},

@@ -102,7 +102,7 @@ class BlueprintSystem(ISystem, INodeGraphProvider):
         """Create a graph node of the given type."""
         if self._graph_getter is None:
             raise RuntimeError("BlueprintSystem not wired")
-        node = self._node_factory.create_node(self._graph_getter(), node_id, pos)
+        node = self._node_factory.create_graph_node(self._graph_getter(), node_id, pos)
         if node:
             self.on_node_created.emit(node, node_id)
         return node

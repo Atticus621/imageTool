@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
-    QMenuBar, QStatusBar, QMenu, QMessageBox, QFileDialog,
+    QMenuBar, QStatusBar, QMenu, QMessageBox, QFileDialog, QDialog,
 )
 
 from core.logger import logger
@@ -16,11 +16,14 @@ from core.config import config
 from core.node_base.registry import node_registry
 from core.system.auto_register import get_all_registrations, get_sorted_by_dependencies
 from ui.qt_engine import QtExecutionEngine as ExecutionEngine
-from systems.execution.result import ExecutionResult
-from ui.node_graph_widget import NodeGraphWidget, GraphNode
+from systems.execution.result import ExecutionResult, ImageSetEntry
+from systems.display_manager import DisplayWindowManager
+from ui.node_graph.widget import NodeGraphWidget
+from ui.node_graph.graph_node import GraphNode
 from ui.node_selector import NodeSelectorWindow
 from ui.project_file_controller import ProjectFileController
 from ui.widgets.info_panel import InfoPanelWidget
+from ui.widgets.node_property_panel import NodePropertyPanel
 from ui.execution_controller import ExecutionController
 
 
@@ -65,6 +68,7 @@ class MainWindow(QMainWindow):
         self._node_graph_widget = None
         self._node_selector = None
         self._engine = ExecutionEngine(self)
+        self._display_manager = DisplayWindowManager()
 
         self._exec_ctrl = ExecutionController(
             engine=self._engine,
@@ -98,10 +102,20 @@ class MainWindow(QMainWindow):
 
         self._splitter = QSplitter(Qt.Orientation.Horizontal)
 
+        # Left side: blueprint canvas + property panel (vertical split)
+        self._left_splitter = QSplitter(Qt.Orientation.Vertical)
         self._node_graph_widget = NodeGraphWidget()
+        self._node_property_panel = NodePropertyPanel()
+
+        self._left_splitter.addWidget(self._node_graph_widget)
+        self._left_splitter.addWidget(self._node_property_panel)
+        self._left_splitter.setSizes([600, 200])
+        self._left_splitter.setStretchFactor(0, 3)
+        self._left_splitter.setStretchFactor(1, 1)
+
         self._right_panel = self._create_right_panel()
 
-        self._splitter.addWidget(self._node_graph_widget)
+        self._splitter.addWidget(self._left_splitter)
         self._splitter.addWidget(self._right_panel)
 
         left_ratio = config.get("ui.left_panel_ratio", 0.55)
@@ -144,6 +158,7 @@ class MainWindow(QMainWindow):
         self._node_graph_widget.node_replace_requested.connect(self._on_replace_requested)
         self._node_graph_widget.node_delete_requested.connect(self._on_delete_requested)
         self._node_graph_widget.node_created_with_meta.connect(self._on_node_created_with_meta)
+        self._node_graph_widget.add_to_display_requested.connect(self._on_add_to_display)
 
         self._engine.execution_started.connect(self._on_engine_started)
         self._engine.execution_finished.connect(self._on_engine_finished)
@@ -153,8 +168,12 @@ class MainWindow(QMainWindow):
         self._image_viewer.ruler_measurement.connect(self._on_ruler_measurement)
         self._image_viewer.pixel_hovered.connect(self._info_panel.update_info)
 
+        # Property panel param changes → sync to GraphNode
+        self._node_property_panel.param_changed.connect(self._on_property_param_changed)
+
         # Project system signals
         self._project.on_project_modified.connect(self._on_project_modified)
+        self._project.on_project_loaded.connect(self._on_project_loaded)
 
     # ------------------------------------------------------------------
     # System wiring
@@ -190,6 +209,11 @@ class MainWindow(QMainWindow):
                     logger.info(f"[MainWindow] Wired system: {name}")
                 except Exception as e:
                     logger.error(f"[MainWindow] Failed to wire {name}: {e}")
+
+        # Wire DisplayManager to ProjectSystem for persistence
+        if "Project" in self._systems:
+            project_system = self._systems["Project"]
+            project_system.set_display_manager(self._display_manager)
 
     def _build_menu(self):
         """从系统注册自动构建菜单"""
@@ -336,11 +360,16 @@ class MainWindow(QMainWindow):
 
     @Slot(list)
     def _on_node_selection_changed(self, selected_nodes):
-        if not selected_nodes:
+        # Query actual selection — signal only emits *newly* selected nodes,
+        # which is empty when dragging an already-selected node.
+        actual = self._node_graph_widget.graph.selected_nodes()
+        if not actual:
+            self._node_property_panel.set_node(None)
             self._statusbar.showMessage("就绪")
             return
 
-        node = selected_nodes[-1]
+        node = actual[-1]
+        self._node_property_panel.set_node(node)
         name = node.name()
         node_id = getattr(node, "_node_id", "")
         unconnected_in = sum(1 for p in node.input_ports() if not p.connected_ports())
@@ -421,6 +450,31 @@ class MainWindow(QMainWindow):
         logger.info(f"Deleting node: {node.name()}")
         self._node_graph_widget.graph.remove_node(node)
 
+    def _on_add_to_display(self, node):
+        """Handle 'add to display' request from node context menu."""
+        from ui.dialogs.new_display_dialog import NewDisplayDialog
+
+        existing = self._display_manager.get_displays()
+        dialog = NewDisplayDialog(existing, parent=self)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        if dialog.is_create_mode:
+            # Create new display
+            name = dialog.new_display_name
+            display_id = self._display_manager.create_display(name)
+            self._display_manager.add_node_to_display(node.name(), display_id)
+            self._image_viewer.add_custom_display(display_id, name)
+            self._project.mark_modified()
+        else:
+            # Add to existing display
+            display_id = dialog.selected_display_id
+            self._display_manager.add_node_to_display(node.name(), display_id)
+            self._project.mark_modified()
+
+        logger.info(f"Node '{node.name()}' added to display")
+
     @Slot(str)
     def _on_node_type_selected(self, node_id: str):
         if hasattr(self, '_pending_replace_node') and self._pending_replace_node:
@@ -432,8 +486,9 @@ class MainWindow(QMainWindow):
                 param_values = self._node_selector.get_param_values()
                 target._param_values.update(param_values)
                 target.sync_port_visibility()
-                target.sync_embedded_widget()
                 logger.info(f"Updated node params: {target.name()} -> {param_values}")
+                # Refresh inline property panel to stay in sync
+                self._node_property_panel.set_node(target)
         else:
             self._node_graph_widget.create_node_by_id(node_id)
 
@@ -448,8 +503,6 @@ class MainWindow(QMainWindow):
             node_id,
             param_values=node._param_values if hasattr(node, '_param_values') else None,
         )
-        # Sync pinned widget with current param values
-        node.sync_embedded_widget()
         self._node_selector.show()
         self._node_selector.raise_()
         self._node_selector.activateWindow()
@@ -474,6 +527,10 @@ class MainWindow(QMainWindow):
         if not title.endswith("*"):
             self.setWindowTitle(f"{title}*")
 
+    def _on_project_loaded(self, project):
+        """Handle project loaded — sync custom displays to viewer."""
+        self._image_viewer.sync_custom_displays(self._display_manager.get_displays())
+
     # ------------------------------------------------------------------
     # Execution control
     # ------------------------------------------------------------------
@@ -491,6 +548,11 @@ class MainWindow(QMainWindow):
     def _on_engine_started(self):
         self._statusbar.showMessage("正在执行...")
         logger.info("Engine started")
+
+    @Slot(str, object)
+    def _on_property_param_changed(self, param_name: str, value):
+        """Property panel param changed — already written to GraphNode by panel."""
+        logger.debug(f"Property panel param changed: {param_name} = {value}")
 
     # ------------------------------------------------------------------
     # Embedded widget support — override in subclasses for node-specific updates
@@ -524,6 +586,13 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_engine_finished(self, result: ExecutionResult):
+        # Collect custom display data
+        custom_sets = self._collect_custom_sets(result)
+        result.custom_sets = custom_sets
+
+        # Sync custom displays in viewer
+        self._image_viewer.sync_custom_displays(self._display_manager.get_displays())
+
         self._image_viewer.set_execution_results(result)
         self._update_embedded_widgets()
 
@@ -543,6 +612,10 @@ class MainWindow(QMainWindow):
                 node.update_state_color(state)
                 break
 
+    def _on_property_param_changed(self, param_name: str, value):
+        """Inline property panel param changed — already synced to GraphNode by the panel."""
+        pass  # NodePropertyPanel handles the write-back directly
+
     def _on_progress_updated(self, current: int, total: int):
         self._statusbar.showMessage(f"执行中... {current}/{total}")
 
@@ -556,6 +629,42 @@ class MainWindow(QMainWindow):
         for node in graph.all_nodes():
             if isinstance(node, GraphNode):
                 node.update_state_color("idle")
+
+    def _collect_custom_sets(self, result: ExecutionResult) -> list[ImageSetEntry]:
+        """Collect image entries for custom displays from execution result."""
+        # Group all available sets by node name prefix
+        all_sets = {}
+        for entry in result.output_sets + result.input_sets:
+            # Entry name format: "node_name:port_name"
+            node_name = entry.name.split(":")[0] if ":" in entry.name else entry.name
+            if node_name not in all_sets:
+                all_sets[node_name] = []
+            all_sets[node_name].append(entry)
+
+        # Build custom sets from display associations
+        display_images: dict[str, list] = {}  # display_id -> list of images
+        for node_name, display_id in self._display_manager._node_displays.items():
+            if display_id not in display_images:
+                display_images[display_id] = []
+            # Find matching entries
+            for entry_name, entries in all_sets.items():
+                if entry_name == node_name or node_name in entry_name:
+                    for entry in entries:
+                        display_images[display_id].extend(entry.images)
+
+        # Convert to ImageSetEntry list
+        custom_sets = []
+        for display_id, images in display_images.items():
+            if images:
+                name = self._display_manager.get_display_name(display_id) or display_id
+                custom_sets.append(ImageSetEntry(name=name, images=images))
+                # Also update viewer's custom display data
+                self._image_viewer.set_custom_display_data(
+                    display_id,
+                    [ImageSetEntry(name=name, images=images)],
+                )
+
+        return custom_sets
 
     # ------------------------------------------------------------------
     # View / toolbar actions

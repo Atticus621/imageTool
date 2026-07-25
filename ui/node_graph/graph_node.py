@@ -24,7 +24,6 @@ class GraphNode(BaseNode):
         self._output_image_count = 0
         self._state = "idle"
         self._param_values = {}
-        self._embedded_widget = None
 
     # ── metadata setup ──────────────────────────────────────────────────
 
@@ -95,42 +94,6 @@ class GraphNode(BaseNode):
             self.create_property(opt_key, opc.default)
 
         self._apply_port_count_visibility()
-
-        # Attach embedded widget (auto-pin or custom factory)
-        self._attach_embedded_widget()
-
-    def _attach_embedded_widget(self):
-        """Create and attach embedded widget for this node.
-
-        Called automatically by set_node_meta() so widgets are created
-        regardless of how the node was created (UI or project load).
-        """
-        if self._embedded_widget is not None:
-            return  # Already has a widget
-        from ui.embedded_widget_registry import EmbeddedWidgetRegistry
-        EmbeddedWidgetRegistry.create(self._node_id, self)
-
-    # ── embedded widgets ─────────────────────────────────────────────────
-
-    def add_embedded_widget(self, widget):
-        self._embedded_widget = widget
-        self.add_custom_widget(widget, widget_type=None)
-
-    def get_embedded_widget(self):
-        return self._embedded_widget
-
-    def sync_embedded_widget(self):
-        """Sync embedded widget values from node._param_values.
-
-        Call this after updating param_values externally (e.g., from editor).
-        """
-        if self._embedded_widget is None:
-            return
-        # For PinnedComboWidget/PinnedCheckboxWidget/PinnedSliderWidget
-        if hasattr(self._embedded_widget, 'set_value') and hasattr(self._embedded_widget, '_param_name'):
-            param_name = self._embedded_widget._param_name
-            if param_name in self._param_values:
-                self._embedded_widget.set_value(self._param_values[param_name])
 
     # ── port visibility ──────────────────────────────────────────────────
 

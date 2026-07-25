@@ -87,7 +87,7 @@ class ExecutionWorker:
                 continue
 
             # --- Lazy node creation (just-in-time, not all upfront) ---
-            exec_node = node_registry.create_node(info.node_id)
+            exec_node = node_registry.create_exec_node(info.node_id)
             if exec_node is None:
                 logger.warning(f"Cannot create execution node for: {info.node_id}")
                 self.on_node_finished.emit(info.name, False)
@@ -171,6 +171,173 @@ class ExecutionWorker:
                     logger.info(
                         f"  Fed total {len(all_images)} images -> {exec_port_name}"
                     )
+
+    # ------------------------------------------------------------------
+    # Streaming execution — one image through full pipeline at a time
+    # ------------------------------------------------------------------
+
+    def run_streaming(self):
+        """Execute images one at a time through the full pipeline.
+
+        Streaming mode:
+        1. Create all execution nodes (just like batch)
+        2. Execute all nodes once to initialize them and extract source images
+        3. Identify source images from nodes with no upstream connections
+        4. For each image:
+           a. Reset all node port data
+           b. Feed single image into source node(s)
+           c. Execute full pipeline topologically
+           d. Emit per-image result
+        """
+        total_nodes = len(self._sorted_nodes)
+
+        # Phase 1: Create execution nodes and do initial pass to set up
+        source_images = []
+        for graph_node in self._sorted_nodes:
+            info = self._node_infos.get(graph_node)
+            if info is None:
+                logger.warning(f"No pipeline info for: {graph_node.name()}")
+                continue
+
+            exec_node = node_registry.create_exec_node(info.node_id)
+            if exec_node is None:
+                logger.warning(f"Cannot create execution node for: {info.node_id}")
+                continue
+            self._exec_nodes[graph_node] = exec_node
+
+            try:
+                exec_node.params.update(info.param_values)
+                exec_node.graph_node_name = graph_node.name()
+                self._feed_input_data(graph_node, exec_node, info)
+                exec_node.execute()
+            except Exception as e:
+                logger.error(f"Initial setup failed for {info.name}: {e}")
+
+        # Phase 2: Extract source images (from nodes with no upstream)
+        for graph_node in self._sorted_nodes:
+            info = self._node_infos.get(graph_node)
+            exec_node = self._exec_nodes.get(graph_node)
+            if info is None or exec_node is None:
+                continue
+
+            has_upstream = any(
+                p.connected_ports() for p in graph_node.input_ports()
+            )
+            if has_upstream:
+                continue
+
+            # Extract images from all output ports
+            for port in graph_node.output_ports():
+                exec_port_name = info.resolve_port_name(port.name())
+                exec_port = exec_node.get_output_port(exec_port_name)
+                if exec_port and exec_port.data is not None:
+                    data = exec_port.data
+                    items = data if isinstance(data, list) else [data]
+                    images = [
+                        item for item in items
+                        if isinstance(item, (np.ndarray, ImageData))
+                    ]
+                    if images:
+                        source_images.extend(images)
+
+        if not source_images:
+            logger.warning("No source images found for streaming execution")
+            self.on_all_finished.emit(ExecutionResult(success=False))
+            return
+
+        total_images = len(source_images)
+        logger.info(f"Streaming {total_images} images through {total_nodes} nodes")
+        all_success = True
+
+        # Phase 3: Per-image streaming
+        for img_idx, single_image in enumerate(source_images):
+            if self.is_cancelled:
+                logger.info("Streaming execution cancelled")
+                self.on_all_finished.emit(ExecutionResult(success=False))
+                return
+
+            # Reset all nodes' port data
+            for exec_node in self._exec_nodes.values():
+                exec_node.reset_ports()
+
+            # Feed single image into source node(s)
+            self._feed_single_image_to_sources(single_image)
+
+            # Execute full pipeline
+            accumulated_entries: list[ImageSetEntry] = []
+
+            for i, graph_node in enumerate(self._sorted_nodes):
+                exec_node = self._exec_nodes.get(graph_node)
+                info = self._node_infos.get(graph_node)
+                if exec_node is None or info is None:
+                    continue
+
+                self.on_node_started.emit(info.name)
+                self.on_progress.emit(i + 1, total_nodes)
+
+                try:
+                    self._feed_input_data(graph_node, exec_node, info)
+                    success = exec_node.execute()
+
+                    self.on_node_finished.emit(info.name, success)
+
+                    if success:
+                        entries = self._get_image_entries_for_node(
+                            graph_node, exec_node, info
+                        )
+                        if entries:
+                            accumulated_entries.extend(entries)
+                    else:
+                        all_success = False
+
+                except Exception as e:
+                    logger.error(f"Node {info.name} failed on image {img_idx}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    exec_node.set_state(NodeState.ERROR)
+                    self.on_node_finished.emit(info.name, False)
+                    all_success = False
+
+            # Emit per-image result
+            result = ExecutionResult(
+                success=all_success,
+                output_sets=accumulated_entries,
+                streaming_image_index=img_idx,
+                streaming_total_images=total_images,
+            )
+            self.on_image_output.emit(result.output_sets)
+            logger.info(
+                f"Streaming image {img_idx + 1}/{total_images} completed"
+            )
+
+        self.on_all_finished.emit(
+            ExecutionResult(
+                success=all_success,
+                output_sets=accumulated_entries,
+            )
+        )
+
+    def _feed_single_image_to_sources(self, image):
+        """Feed a single image into all source nodes (no upstream connections)."""
+        for graph_node in self._sorted_nodes:
+            info = self._node_infos.get(graph_node)
+            exec_node = self._exec_nodes.get(graph_node)
+            if info is None or exec_node is None:
+                continue
+
+            has_upstream = any(
+                p.connected_ports() for p in graph_node.input_ports()
+            )
+            if has_upstream:
+                continue
+
+            # Find the first input port and feed the image
+            for port_def in exec_node.input_ports.values():
+                port_def.data = [image]
+                logger.info(
+                    f"  Fed single image to source node {info.name}:{port_def.definition.name}"
+                )
+                break  # Feed to first input port only
 
     def _get_image_entries_for_node(self, graph_node, exec_node, info):
         """Get all image entries from a node's output ports that contain actual images.

@@ -16,6 +16,7 @@ from .errors import (
 )
 from .models import (
     ConnectionData,
+    DisplayData,
     ExecutionConfig,
     NodeData,
     NodePosition,
@@ -45,6 +46,7 @@ __all__ = [
     "ConnectionData",
     "ROISerializedData",
     "ExecutionConfig",
+    "DisplayData",
     # Core classes
     "ProjectSerializer",
     "ProjectMigrator",

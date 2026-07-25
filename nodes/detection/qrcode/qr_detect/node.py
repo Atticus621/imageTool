@@ -15,7 +15,6 @@ class QRDetectNode(DetectionBase):
 
     NODE_ID = "detection/qrcode/qr_detect"
     NODE_NAME = "二维码识别"
-    NODE_CATEGORY = "检测"
     NODE_DESCRIPTION = (
         "检测并解码图像中的二维码和条码。\n"
         "- OpenCV: 内置支持，无需额外安装\n"

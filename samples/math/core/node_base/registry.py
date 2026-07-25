@@ -131,7 +131,7 @@ class NodeRegistry:
             logger.error(f"Failed to lazy load {node_id}: {e}")
             return None
 
-    def create_node(self, node_id: str, instance_id: str = None) -> "NodeBase | None":
+    def create_exec_node(self, node_id: str, instance_id: str = None) -> "NodeBase | None":
         meta = self.get_meta(node_id)
         cls = self.get_class(node_id)
         if meta is None:

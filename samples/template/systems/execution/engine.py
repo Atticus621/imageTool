@@ -76,7 +76,7 @@ class ExecutionEngine(IExecutionProvider):
             node_infos[gn] = info
             logger.info(f"[Engine] Node '{gn.name()}': {info}")
 
-            exec_node = node_registry.create_node(node_id)
+            exec_node = node_registry.create_exec_node(node_id)
             if exec_node:
                 exec_nodes[gn] = exec_node
                 exec_node.set_state(NodeState.RUNNING)

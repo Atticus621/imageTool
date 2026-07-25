@@ -51,7 +51,6 @@ class ParamDefinition:
     filters: str = ""
     multi: bool = False
     depends_on: str = ""
-    pinned: bool = False
 
     def __post_init__(self):
         if not self.label:
@@ -62,8 +61,6 @@ class ParamDefinition:
 class NodeMeta:
     id: str
     name: str
-    category: str
-    subcategory: str = ""
     description: str = ""
     version: str = "1.0.0"
     icon: str = ""
@@ -72,20 +69,6 @@ class NodeMeta:
     params: list[ParamDefinition] = field(default_factory=list)
     optional_ports: list[PortConfig] = field(default_factory=list)
     node_dir: str = ""
-
-    @property
-    def category_path(self) -> list[str]:
-        """返回分类路径列表，如 ["图像运算", "掩码操作", "高级"]"""
-        # 如果 category 包含 /，直接分割
-        if "/" in self.category:
-            return [p for p in self.category.split("/") if p]
-        # 兼容旧格式：category + subcategory
-        parts = []
-        if self.category:
-            parts.append(self.category)
-        if self.subcategory:
-            parts.append(self.subcategory)
-        return parts
 
     @classmethod
     def from_json(cls, data: dict, node_dir: str = "") -> NodeMeta:
@@ -121,7 +104,6 @@ class NodeMeta:
                 filters=p.get("filters", ""),
                 multi=p.get("multi", False),
                 depends_on=p.get("depends_on", ""),
-                pinned=p.get("pinned", False),
             ))
 
         optional_ports = []
@@ -152,8 +134,6 @@ class NodeMeta:
         return cls(
             id=data["id"],
             name=data["name"],
-            category=data.get("category", ""),
-            subcategory=data.get("subcategory", ""),
             description=data.get("description", ""),
             version=data.get("version", "1.0.0"),
             icon=data.get("icon", ""),
@@ -170,8 +150,6 @@ class NodeBase:
     # Set these on your subclass to define the node without a meta.json file.
     NODE_ID: str = ""             # e.g. "processing/image_operations/mask_ops"
     NODE_NAME: str = ""           # e.g. "掩码操作"
-    NODE_CATEGORY: str = ""       # e.g. "图像运算"
-    NODE_SUBCATEGORY: str = ""    # optional
     NODE_DESCRIPTION: str = ""
     NODE_VERSION: str = "1.0.0"
     NODE_INPUTS: list[dict] = []  # [{"name":"x", "type":"image", "label":"X"}, ...]
@@ -187,8 +165,6 @@ class NodeBase:
         return NodeMeta.from_json({
             "id": cls.NODE_ID,
             "name": cls.NODE_NAME or cls.__name__,
-            "category": cls.NODE_CATEGORY,
-            "subcategory": cls.NODE_SUBCATEGORY,
             "description": cls.NODE_DESCRIPTION,
             "version": cls.NODE_VERSION,
             "inputs": cls.NODE_INPUTS,
@@ -388,3 +364,16 @@ class NodeBase:
     def set_state(self, state: NodeState):
         self.state = state
         logger.info(f"Node {self.meta.name} state -> {state.value}")
+
+    def reset_ports(self):
+        """Clear all port data between streaming iterations."""
+        for port in self.input_ports.values():
+            port.data = None
+        for port in self.output_ports.values():
+            port.data = None
+
+    def set_single_image(self, port_name: str, image):
+        """Set a single image on an input port (for streaming mode)."""
+        port = self.input_ports.get(port_name)
+        if port:
+            port.data = [image]

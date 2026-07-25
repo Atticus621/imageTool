@@ -15,7 +15,6 @@ class BinarizeNode(NodeBase):
 
     NODE_ID = "processing/preprocess/binarize"
     NODE_NAME = "二值化"
-    NODE_CATEGORY = "图像预处理"
     NODE_DESCRIPTION = "图像二值化：固定阈值、自适应阈值、Otsu自动阈值"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},

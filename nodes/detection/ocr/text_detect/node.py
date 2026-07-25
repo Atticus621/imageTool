@@ -15,7 +15,6 @@ class TextDetectNode(DetectionBase):
 
     NODE_ID = "detection/ocr/text_detect"
     NODE_NAME = "文字检测(OCR)"
-    NODE_CATEGORY = "检测"
     NODE_DESCRIPTION = (
         "检测并识别图像中的文字区域。支持三种引擎：\n"
         "- PaddleOCR: pip install paddleocr paddlepaddle\n"

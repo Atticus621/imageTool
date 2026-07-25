@@ -24,8 +24,6 @@ _pending_data: dict[str, tuple] = {}
 class HistogramNode(NodeBase):
     NODE_ID = "processing/statistics/histogram"
     NODE_NAME = "直方图统计"
-    NODE_CATEGORY = "图像处理"
-    NODE_SUBCATEGORY = "统计"
     NODE_DESCRIPTION = "计算图像各通道直方图并输出可视化结果，支持 LAB/HSV 等颜色空间"
     NODE_INPUTS = [
         {"name": "images", "type": "image", "label": "图像输入"},

@@ -65,11 +65,9 @@ class ColorFilterNode(NodeBase):
         mask   — binary mask (0 or 255) as single-channel GRAY image.
     """
 
-    NODE_ID = "processing/color/color_filter"
+    NODE_ID = "processing/color_conversion/color_filter"
     NODE_NAME = "颜色过滤"
-    NODE_CATEGORY = "图像处理"
-    NODE_SUBCATEGORY = "颜色"
-    NODE_DESCRIPTION = "按通道值范围滤波图像，输出滤波后图像和掩码"
+    NODE_DESCRIPTION = "根据选定通道的数值范围过滤图像，支持输入图像颜色空间与过滤通道空间不同的情况"
 
     def execute(self) -> bool:
         channel_type = self.params.get("channel_type", "rgb")

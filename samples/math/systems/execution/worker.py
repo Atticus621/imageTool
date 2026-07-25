@@ -88,7 +88,7 @@ class ExecutionWorker:
                 continue
 
             # --- Lazy node creation (just-in-time, not all upfront) ---
-            exec_node = node_registry.create_node(info.node_id)
+            exec_node = node_registry.create_exec_node(info.node_id)
             if exec_node is None:
                 logger.warning(f"Cannot create execution node for: {info.node_id}")
                 self.on_node_finished.emit(info.name, False)

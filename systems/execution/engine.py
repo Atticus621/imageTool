@@ -14,6 +14,7 @@ from core.interfaces import IExecutionProvider
 from core.logger import logger
 from core.node_base.registry import node_registry
 from core.node_base.node import NodeState
+from core.diagnostic.node_tracker import NodeExecutionTracker
 from core.pipeline import PipelineNodeInfo
 from systems.execution.result import ExecutionResult
 from systems.execution.topology import topological_sort
@@ -41,6 +42,7 @@ class ExecutionEngine(IExecutionProvider):
     def __init__(self):
         self._thread: threading.Thread | None = None
         self._worker: ExecutionWorker | None = None
+        self._streaming_mode = False
 
         # EventEmitters (replaces Qt Signals)
         self.on_started = EventEmitter()
@@ -76,7 +78,7 @@ class ExecutionEngine(IExecutionProvider):
             node_infos[gn] = info
             logger.info(f"[Engine] Node '{gn.name()}': {info}")
 
-            exec_node = node_registry.create_node(node_id)
+            exec_node = node_registry.create_exec_node(node_id)
             if exec_node:
                 exec_nodes[gn] = exec_node
                 exec_node.set_state(NodeState.RUNNING)
@@ -84,7 +86,7 @@ class ExecutionEngine(IExecutionProvider):
             else:
                 logger.warning(f"Cannot create execution node for: {node_id}")
 
-        self._worker = ExecutionWorker(sorted_nodes, exec_nodes, node_infos)
+        self._worker = ExecutionWorker(sorted_nodes, node_infos)
 
         # Wire worker events → engine events
         self._worker.on_progress.connect(
@@ -100,7 +102,8 @@ class ExecutionEngine(IExecutionProvider):
             lambda r: self._on_all_finished(r)
         )
 
-        self._thread = threading.Thread(target=self._worker.run, daemon=True)
+        target = self._worker.run_streaming if self._streaming_mode else self._worker.run
+        self._thread = threading.Thread(target=target, daemon=True)
         self.on_started.emit()
         self._thread.start()
 
@@ -109,17 +112,24 @@ class ExecutionEngine(IExecutionProvider):
         if self._worker:
             self._worker.cancel()
 
+    def set_streaming_mode(self, enabled: bool):
+        """Toggle between batch and streaming execution modes."""
+        self._streaming_mode = enabled
+        logger.info(f"Streaming mode: {'enabled' if enabled else 'disabled'}")
+
     # ------------------------------------------------------------------
     # Internal event handlers
     # ------------------------------------------------------------------
 
     def _on_node_started(self, name: str):
         logger.info(f"Node started: {name}")
+        NodeExecutionTracker.on_node_started(name)
         self.on_node_state_changed.emit(name, "running")
 
     def _on_node_finished(self, name: str, success: bool):
         state = "success" if success else "error"
         logger.info(f"Node finished: {name} -> {state}")
+        NodeExecutionTracker.on_node_finished(name, success=success)
         self.on_node_state_changed.emit(name, state)
 
     def _on_all_finished(self, result: ExecutionResult):

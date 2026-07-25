@@ -1,0 +1,11 @@
+{
+    "id": "detection/ocr/text_detect",
+    "name": "文字检测(OCR)",
+    "description": "",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [],
+    "outputs": [],
+    "optional_ports": [],
+    "params": []
+}

@@ -36,6 +36,7 @@ class NodeGraphWidget(QWidget):
     node_replace_requested = Signal(object)
     node_delete_requested = Signal(object)
     node_created_with_meta = Signal(object, str)
+    add_to_display_requested = Signal(object)  # node
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -87,6 +88,8 @@ class NodeGraphWidget(QWidget):
         nodes_menu.add_command("重命名端口", self._on_rename_node,
                                node_type="nodeGraphQt.nodes.PortOutputNode")
         nodes_menu.add_command("替换节点", self._on_replace_node,
+                               node_type="imagetools.GraphNode")
+        nodes_menu.add_command("添加到显示", self._on_add_to_display,
                                node_type="imagetools.GraphNode")
         nodes_menu.add_command("删除节点", self._on_delete_node,
                                node_type="imagetools.GraphNode")
@@ -223,6 +226,9 @@ class NodeGraphWidget(QWidget):
     def _on_delete_node(self, graph, node):
         self.node_delete_requested.emit(node)
 
+    def _on_add_to_display(self, graph, node):
+        self.add_to_display_requested.emit(node)
+
     # ── node CRUD ────────────────────────────────────────────────────────
 
     def create_node_by_id(self, node_id: str, pos=None):
@@ -250,11 +256,12 @@ class NodeGraphWidget(QWidget):
             logger.error(f"Node type not found: {new_node_id}")
             return None
         old_meta_id = getattr(old_node, "_node_id", "")
-        old_meta = node_registry.get_meta(old_meta_id)
-        if old_meta and old_meta.category != meta.category:
+        if not node_registry.same_category(old_meta_id, new_node_id):
+            old_cat = node_registry.get_category(old_meta_id)
+            new_cat = node_registry.get_category(new_node_id)
             logger.warning(
                 f"Cannot replace: category mismatch "
-                f"({old_meta.category} != {meta.category})"
+                f"({old_cat} != {new_cat})"
             )
             return None
 

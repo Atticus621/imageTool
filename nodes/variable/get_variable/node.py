@@ -9,7 +9,6 @@ class GetVariableNode(NodeBase):
 
     NODE_ID = "variable/get"
     NODE_NAME = "获取变量"
-    NODE_CATEGORY = "变量"
     NODE_DESCRIPTION = "从全局变量中读取值"
     NODE_INPUTS = []
     NODE_OUTPUTS = [
@@ -54,7 +53,6 @@ class GetVariableNode(NodeBase):
         meta = NodeMeta(
             id=cls.NODE_ID,
             name=cls.NODE_NAME,
-            category=cls.NODE_CATEGORY,
             description=cls.NODE_DESCRIPTION,
             inputs=[],
             outputs=[{"name": "value", "type": "any", "label": "值"}],

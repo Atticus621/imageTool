@@ -9,7 +9,6 @@ class SetVariableNode(NodeBase):
 
     NODE_ID = "variable/set"
     NODE_NAME = "设置变量"
-    NODE_CATEGORY = "变量"
     NODE_DESCRIPTION = "将输入值设置为全局变量"
     NODE_INPUTS = [
         {"name": "value", "type": "any", "label": "值"},

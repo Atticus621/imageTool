@@ -35,7 +35,7 @@ class DetectionBase(NodeBase):
 
         # 读取参数
         params = self._get_detection_params()
-        output_annotated = self.params.get("_opt_annotated", False)
+        output_annotated = self.params.get("_opt_images", False)
 
         results: list[ImageData] = []
         all_rois = []
@@ -55,7 +55,7 @@ class DetectionBase(NodeBase):
             all_rois.extend(rois)
 
         if output_annotated and results:
-            self._set_output_images("annotated", results)
+            self._set_output_images("images", results)
         self._set_output_rois("rois", all_rois)
 
         # Output optional statistics

@@ -102,7 +102,7 @@ class BridgeCommandHandler:
     def _handle_create(self, request_id: str, params: dict) -> None:
         node_id = params.get("node_id")
         pos = params.get("pos", [0, 0])
-        node = self._node_factory.create_node(
+        node = self._node_factory.create_graph_node(
             self._get_graph(), node_id, pos=tuple(pos)
         )
         if node:

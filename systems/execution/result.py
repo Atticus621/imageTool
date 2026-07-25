@@ -18,3 +18,6 @@ class ExecutionResult:
     success: bool
     input_sets: list[ImageSetEntry] = field(default_factory=list)
     output_sets: list[ImageSetEntry] = field(default_factory=list)
+    custom_sets: list[ImageSetEntry] = field(default_factory=list)
+    streaming_image_index: int = -1
+    streaming_total_images: int = 0

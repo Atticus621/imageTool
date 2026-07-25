@@ -1,0 +1,11 @@
+{
+    "id": "variable/get",
+    "name": "获取变量",
+    "description": "从全局变量中读取值",
+    "version": "1.0.0",
+    "icon": "",
+    "inputs": [],
+    "outputs": [],
+    "optional_ports": [],
+    "params": []
+}
